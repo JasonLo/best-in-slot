@@ -6,6 +6,10 @@ __pycache__/
 .python-version
 *.egg-info/
 
+# bis local state
+.bis/
+profile.yaml
+
 # uv
 # (uv.lock IS committed — intentionally not excluded)
 
