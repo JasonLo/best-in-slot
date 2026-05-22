@@ -2,7 +2,7 @@
 name = "uv-example"
 version = "0.1.0"
 description = "Minimal uv project."
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = []
 
 [project.scripts]

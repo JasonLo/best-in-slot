@@ -9,7 +9,7 @@ Compose à la carte — recipes near the bottom show common combinations.
 These hold across every Python slot unless the slot's README says otherwise:
 
 - **Package manager**: `uv` with `uv_build` backend.
-- **Python**: 3.14 (new projects), 3.12 floor (libraries shared with CHTC / DSI infra).
+- **Python**: 3.14 (single floor across new code and shared libraries).
 - **Lint / format**: `ruff`.
 - **Type check**: `ty`.
 - **Tests**: `pytest` (+ `pytest-asyncio` when async).

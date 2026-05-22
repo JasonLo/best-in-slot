@@ -1,31 +1,37 @@
 <!--
 Sync Impact Report
 ==================
-Version change: (template) → 1.0.0
-Bump rationale: Initial ratification of the Best-in-Slot constitution.
+Version change: 1.0.0 → 1.1.0
+Bump rationale: Raise Python floor from ≥3.11 to ≥3.14. MINOR per the
+governance policy ("materially expanded guidance") — the existing
+Principle IV toolchain is unchanged, but the runtime floor it depends on
+is tightened. Aligns the constitution with the README (which already
+flagged 3.14 as the new-project target) and standardises the slot
+example `pyproject.toml` pins on >=3.14 in the same change.
 
-Principles defined (all new):
-  I.   Python does Data, Claude does Judgment
-  II.  YAML is the Source of Truth (no databases)
-  III. Skills Wrap the CLI (not the other way around)
-  IV.  Modern Python Toolchain (uv · Typer · Pydantic v2 · httpx)
-  V.   Lean on `gh` for GitHub (no raw token management)
+Sections modified:
+  - Tech Stack Constraints → Language/Version line
 
-Added sections:
-  - Tech Stack Constraints
-  - Skill / CLI Workflow
-  - Governance
-
-Removed sections: none.
+Principles changed: none (no removal, no redefinition).
 
 Templates requiring updates:
-  - .specify/templates/plan-template.md     ✅ Constitution Check gate will resolve against these principles (no edits required; placeholder block is generic).
-  - .specify/templates/spec-template.md     ✅ No scope/constraint additions imposed by this constitution that are not already general.
-  - .specify/templates/tasks-template.md    ✅ Task categories unchanged; principles inform review, not task taxonomy.
+  - .specify/templates/plan-template.md     ✅ No edits; the Constitution Check gate references the principle by name, not by version pin.
+  - .specify/templates/spec-template.md     ✅ Compatible as-is.
+  - .specify/templates/tasks-template.md    ✅ Compatible as-is.
   - .specify/templates/checklist-template.md ✅ Compatible as-is.
-  - README.md                                ⚠ Consider linking to .specify/memory/constitution.md from the README "Architecture" section (not blocking).
+  - README.md                                ✅ Updated in the same change (single Python line now reads 3.14).
+  - slots/**/example/pyproject.toml          ✅ All 29 pinned to requires-python = ">=3.14".
 
-Deferred TODOs: none.
+Deferred TODOs:
+  - Pixi configs in slots/infra/pixi/ still pin python = "3.12.*".
+    These are documentation/recipe content, not project pins, so they
+    are addressed as a separate content edit, not as a constitution
+    amendment.
+
+History:
+  1.0.0 — Initial ratification (2026-05-22). Five principles + Tech Stack
+          Constraints + Skill / CLI Workflow + Governance. See git blame
+          for content.
 -->
 
 # Best-in-Slot Constitution
@@ -86,7 +92,7 @@ enterprise/SSO support.
 
 ## Tech Stack Constraints
 
-- **Language/Version:** Python ≥ 3.11. No Python 2, no untyped code paths in
+- **Language/Version:** Python ≥ 3.14. No Python 2, no untyped code paths in
   `bis/`.
 - **Type checking:** Pydantic models for I/O boundaries; standalone type hints
   on all public functions in `bis/`.
@@ -139,4 +145,4 @@ enterprise/SSO support.
   explaining why no compliant design exists. Reviewers SHOULD push back on
   unjustified violations.
 
-**Version**: 1.0.0 | **Ratified**: 2026-05-22 | **Last Amended**: 2026-05-22
+**Version**: 1.1.0 | **Ratified**: 2026-05-22 | **Last Amended**: 2026-05-22
