@@ -82,7 +82,7 @@ def test_walk_consumes_pending_and_writes_slot_yamls(patched_pipeline, tmp_slots
 
     _install_scripted_adapter(monkeypatch, ["accept"] * len(pending))
 
-    walk = runner.invoke(cli_mod.app, ["init", "walk", "--json"])
+    walk = runner.invoke(cli_mod.app, ["init", "walk", "--skip-confirm", "--json"])
     assert walk.exit_code == 0, walk.stderr or walk.stdout
     payload = json.loads(walk.stdout)
 
@@ -108,7 +108,7 @@ def test_walk_clears_pending_proposals_after_completion(
 
     _install_scripted_adapter(monkeypatch, ["accept"] * len(pre["pending_proposals"]))
 
-    runner.invoke(cli_mod.app, ["init", "walk", "--json"])
+    runner.invoke(cli_mod.app, ["init", "walk", "--skip-confirm", "--json"])
     post = yaml.safe_load((tmp_slots_root / ".bootstrap.yaml").read_text())
     assert post.get("pending_proposals") in (None, []), (
         "walk must clear pending_proposals on completion"
@@ -122,7 +122,7 @@ def test_walk_with_no_pending_proposals_errors(patched_pipeline, tmp_slots_root,
     _install_scripted_adapter(monkeypatch, [])
 
     # No `bis init mine` first → no pending proposals.
-    walk = runner.invoke(cli_mod.app, ["init", "walk", "--json"])
+    walk = runner.invoke(cli_mod.app, ["init", "walk", "--skip-confirm", "--json"])
 
     assert walk.exit_code != 0
     err = json.loads(walk.stdout)
@@ -143,7 +143,7 @@ def test_walk_handles_change_skip_defer_actions(patched_pipeline, tmp_slots_root
     script: list[str] = [f"change:{first_alternative}", "skip"] + ["accept"] * (len(pending) - 2)
     _install_scripted_adapter(monkeypatch, script)
 
-    walk = runner.invoke(cli_mod.app, ["init", "walk", "--json"])
+    walk = runner.invoke(cli_mod.app, ["init", "walk", "--skip-confirm", "--json"])
     assert walk.exit_code == 0, walk.stderr or walk.stdout
     payload = json.loads(walk.stdout)
 

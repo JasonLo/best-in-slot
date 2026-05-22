@@ -25,6 +25,7 @@ DecisionAction = Literal[
     "add",
 ]
 StructureKind = Literal["split", "merge", "rename", "drop", "add"]
+EditPhase = Literal["confirm", "walk", "post_walk"]
 HistoryAction = Literal[
     "bootstrap-accept",
     "bootstrap-change",
@@ -119,6 +120,22 @@ class CategoryProposal(_Strict):
     confidence_qualifier: ConfidenceQualifier | None = None
 
 
+class StructureOverviewEntry(_Strict):
+    """One row in the US6 structure-confirmation overview.
+
+    Derived purely from a ``CategoryProposal`` plus the result of
+    ``categories.suggest_split``. No new payload type; reuses fields already
+    present on the proposal so the LLM trust boundary (FR-013) is unaffected.
+    """
+
+    category: str = Field(min_length=1)
+    category_type: CategoryType
+    proposed_pick: str = Field(min_length=1)
+    members: list[str] = Field(default_factory=list)
+    evidence_strength: float = Field(ge=0)
+    suggest_split_into: list[str] | None = None
+
+
 # --------------------------------------------------------------------------- privacy / LLM boundary
 
 
@@ -188,6 +205,10 @@ class StructureChange(_Strict):
     new_pick: str | None = None
     new_category_type: CategoryType | None = None
     applied_at: datetime = Field(default_factory=_utc_now)
+    # US6 — distinguishes edits at the structure-confirmation step from edits
+    # applied during the per-slot walk. Default "walk" preserves back-compat
+    # for existing US4 callers and YAML records that predate this field.
+    applied_at_phase: EditPhase = "walk"
 
     @model_validator(mode="after")
     def _check_payload(self) -> StructureChange:
@@ -274,7 +295,9 @@ __all__ = [
     "SkippedSource",
     "SlotDecision",
     "SlotState",
+    "EditPhase",
     "StructureChange",
     "StructureKind",
+    "StructureOverviewEntry",
     "ToolSignal",
 ]

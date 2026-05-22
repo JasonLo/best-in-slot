@@ -13,16 +13,45 @@
 
 ```bash
 uv sync                            # install pinned deps
-uv run bis init               # interactive walk-through (mine + walk in one shot)
+uv run bis init               # interactive: mine → confirm structure → walk
 ```
 
 What you'll see:
 
 1. **Mining phase** — progress like `Scanning owner/repo (12/47)…`. First run takes a few minutes for ≤50 repos; subsequent runs within 24h hit the cache and finish in seconds (SC-009).
 2. **Existing-state check** — if any `slots/*.yaml` files already exist, the CLI pauses and asks `merge / replace / skip`. Pick one explicitly.
-3. **Walk-through** — proposals appear one slot at a time, in the order: languages → frameworks → tooling. Powered by `questionary` (arrow keys + Enter, sub-second per-slot latency — SC-011). Pick `change pick` to type any package name (observed or not — Q1 clarification).
-4. **Per-slot deep-dive offer** — after each accept/change: `Run /deep-dive on this slot now? [y/n/a=all-later/x=skip-all]`. `/deep-dive` is invoked by the skill layer; in raw CLI mode this offer can be skipped with `--no-deep-dive-prompt`.
-5. **Run summary** — counts of accepted/changed/skipped/deferred, plus any skipped sources (FR-008).
+3. **Structure-confirmation step (US6)** — a one-shot overview prints every proposed category with its type, members, and (where the heuristic table can offer one) a suggested split. The prompt `[looks good / reshape]` defaults to `looks good` — press **Enter to accept** and continue. To reshape, type `reshape` and enter a single inner loop: pick `split / merge / rename / drop / add` repeatedly, each edit redisplays the overview, and `done` exits to the walk. Edits applied here are tagged `applied_at_phase = "confirm"` in `slots/.bootstrap.yaml:taxonomy_edits`.
+4. **Walk-through** — proposals appear one slot at a time, in the order: languages → frameworks → tooling. Powered by `questionary` (arrow keys + Enter, sub-second per-slot latency — SC-011). Pick `change pick` to type any package name (observed or not — Q1 clarification).
+5. **Per-slot deep-dive offer** — after each accept/change: `Run /deep-dive on this slot now? [y/n/a=all-later/x=skip-all]`. `/deep-dive` is invoked by the skill layer; in raw CLI mode this offer can be skipped with `--no-deep-dive-prompt`.
+6. **Run summary** — counts of accepted/changed/skipped/deferred, plus any skipped sources (FR-008).
+
+### Worked example — reshape during confirm
+
+```text
+Structure overview — 3 slot(s):
+  - python-web [framework] · fastapi, django
+  - python-tooling [tooling] · ruff, uv, pytest · suggest_split → linter-formatter, package-manager, test-runner
+  - databases [tooling] · postgresql
+
+[looks good / reshape] [looks good]: reshape
+action [split/merge/rename/drop/add/done] [done]: split
+target category: python-tooling
+into (comma-separated category names, blank for suggest_split): <Enter — accept suggestion>
+
+Structure overview — 5 slot(s):
+  - python-web [framework] · fastapi, django
+  - linter-formatter [tooling] · ruff
+  - package-manager [tooling] · uv
+  - test-runner [tooling] · pytest
+  - databases [tooling] · postgresql
+action [split/merge/rename/drop/add/done] [done]: rename
+target category: databases
+new name: datastore
+...
+action [split/merge/rename/drop/add/done] [done]: done
+
+Walk-through: 5 slot(s) to review.
+```
 
 ---
 
@@ -32,7 +61,9 @@ For scripted/skill use, the two-step flow gives you a clean handoff point betwee
 
 ```bash
 uv run bis init mine --json   # mine + propose; persists slots/.bootstrap.yaml; emits proposals
-uv run bis init walk          # fast local walk-through over the persisted proposals
+uv run bis init walk          # confirm structure → fast local walk-through (US6 + US5)
+# Skill flow can skip the confirm step since it already ran taxonomy-review:
+uv run bis init walk --skip-confirm
 ```
 
 Why split it? **Speed.** When `/bis-bootstrap` drove the per-slot loop conversationally, every accept/change/skip/defer cost one LLM turn (~5–15s × ~12 slots = 2–4 min of waiting). With `mine` + `walk`, the LLM is involved once (mining), then you drive the picks at native CLI speed. Target: ≤30s total LLM-active wall-clock per session (SC-012), and p95 < 200ms per-slot decision latency (SC-011).

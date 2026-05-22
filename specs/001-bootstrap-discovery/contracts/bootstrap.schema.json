@@ -141,7 +141,11 @@
         "new_category_type": {
           "enum": ["language", "framework", "tooling", null]
         },
-        "applied_at": { "type": "string", "format": "date-time" }
+        "applied_at": { "type": "string", "format": "date-time" },
+        "applied_at_phase": {
+          "description": "US6 — distinguishes edits applied at the structure-confirmation step from edits applied during the per-slot walk. Defaults to 'walk' for back-compat.",
+          "enum": ["confirm", "walk", "post_walk"]
+        }
       }
     },
     "TaxonomyReviewProposal": {
@@ -155,6 +159,11 @@
         "members": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 }
+        },
+        "evidence_strength": {
+          "description": "US6 — surfaced in the structure overview so users can read signal strength at a glance.",
+          "type": "number",
+          "minimum": 0
         },
         "suggest_split_into": {
           "type": ["array", "null"],
@@ -188,6 +197,11 @@
         "deferred_categories_resurfaced": {
           "type": "array",
           "items": { "type": "string" }
+        },
+        "proposed_structure_overview": {
+          "description": "US6 — taxonomy overview emitted alongside `proposals` in batch mode. Mirrors the `taxonomy-review` payload so consumers can render structure decisions without a second CLI call.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/TaxonomyReviewProposal" }
         }
       }
     },

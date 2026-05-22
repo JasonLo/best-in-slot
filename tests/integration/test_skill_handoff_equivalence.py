@@ -129,7 +129,8 @@ def test_mine_walk_handoff_matches_direct_confirm_flow(patched_pipeline, tmp_pat
         lambda: walk_mod.ScriptedAdapter(["accept"] * len(pending)),
     )
 
-    walk = runner.invoke(cli_mod.app, ["init", "walk", "--json"])
+    # Skill flow uses --skip-confirm (it already called taxonomy-review upstream).
+    walk = runner.invoke(cli_mod.app, ["init", "walk", "--skip-confirm", "--json"])
     assert walk.exit_code == 0, walk.stderr or walk.stdout
 
     flow_b_states = {

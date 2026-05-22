@@ -43,6 +43,7 @@ from bis.models import (
     SlotDecision,
     SlotState,
     StructureChange,
+    StructureOverviewEntry,
     ToolSignal,
 )
 from bis.privacy import SCANNER_VERSION
@@ -171,6 +172,34 @@ def proposals_for_walkthrough(
 ) -> list[CategoryProposal]:
     raw = build_proposals(profile, now=now)
     return order_for_walkthrough(raw, deferred=deferred)
+
+
+def build_structure_overview(
+    proposals: Iterable[CategoryProposal],
+) -> list[StructureOverviewEntry]:
+    """US6 — one ``StructureOverviewEntry`` per proposal, in FR-014 order.
+
+    Pure on its inputs. The FR-014 ordering is re-applied here so callers can
+    pass either an ordered or an arbitrary iterable. ``suggest_split_into`` is
+    populated when :func:`bis.categories.suggest_split` returns a non-None
+    partition; otherwise None.
+    """
+
+    ordered = order_for_walkthrough(list(proposals))
+    out: list[StructureOverviewEntry] = []
+    for p in ordered:
+        suggestion = suggest_split(p)
+        out.append(
+            StructureOverviewEntry(
+                category=p.category,
+                category_type=p.category_type,
+                proposed_pick=p.proposed_pick,
+                members=[p.proposed_pick, *p.alternatives],
+                evidence_strength=p.evidence_strength,
+                suggest_split_into=(sorted(s.category for s in suggestion) if suggestion else None),
+            )
+        )
+    return out
 
 
 def walkthrough_iter(
@@ -432,6 +461,7 @@ def record_structure_change(state: BootstrapRunState, change: StructureChange) -
 __all__ = [
     "apply_decision",
     "apply_structure_change",
+    "build_structure_overview",
     "clear_deferral",
     "detect_existing_state",
     "end_run_state",

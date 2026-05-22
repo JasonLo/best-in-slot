@@ -27,6 +27,8 @@ import typer
 
 from bis.bootstrap import (
     apply_decision,
+    apply_structure_change,
+    build_structure_overview,
     clear_deferral,
     detect_existing_state,
     end_run_state,
@@ -190,14 +192,162 @@ def init_root(
                 "skipped_sources": [s.model_dump() for s in profile.skipped_sources],
                 "on_existing_choice": on_existing,
                 "deferred_categories_resurfaced": list(run.deferred_categories),
+                "proposed_structure_overview": [
+                    o.model_dump(mode="json") for o in build_structure_overview(proposals)
+                ],
             }
         )
+
+    # US6 — structure-confirmation step BEFORE per-slot prompts.
+    # Skipped in `--batch` (returned above) and `--json --dry-run` (preserves
+    # the existing automation surface for non-interactive runs).
+    if not (json_mode and dry_run):
+        run = read_bootstrap_run_state() or run
+        proposals = _interactive_confirm_structure(proposals, run)
+        # Pick up any taxonomy_edits the confirm step persisted so end_run_state
+        # doesn't overwrite them with a stale in-memory copy.
+        run = read_bootstrap_run_state() or run
 
     # Interactive walk-through.
     _interactive_walkthrough(
         proposals, profile, run, on_existing=on_existing or "merge", dry_run=dry_run
     )
+    # Refresh once more in case the walk-through layer mutated state on disk.
+    run = read_bootstrap_run_state() or run
     end_run_state(run, profile.skipped_sources)
+
+
+def _interactive_confirm_structure(
+    proposals: list[CategoryProposal],
+    run,
+) -> list[CategoryProposal]:
+    """US6 — print the structure overview and run the confirm/reshape loop.
+
+    Returns the (possibly reshaped) proposal list. Per the 2026-05-22
+    clarification session:
+
+    - The overview is shown unconditionally, even for trivial proposal sets.
+    - The outer prompt defaults to ``looks good`` — pressing Enter accepts.
+    - On ``reshape`` the user enters a single inner loop accepting repeated
+      structural actions (split / merge / rename / drop / add) and exiting only
+      on explicit ``done``. Each edit is appended to ``run.taxonomy_edits`` with
+      ``applied_at_phase="confirm"``.
+
+    No new structural primitive is introduced; this is a CLI prompt wrapper
+    around the existing :func:`bis.bootstrap.apply_structure_change`.
+    """
+
+    def _print_overview(props: list[CategoryProposal]) -> None:
+        overview = build_structure_overview(props)
+        typer.echo(f"\nStructure overview — {len(overview)} slot(s):")
+        for entry in overview:
+            members = ", ".join(entry.members) if entry.members else entry.proposed_pick
+            suggest = (
+                f" · suggest_split → {', '.join(entry.suggest_split_into)}"
+                if entry.suggest_split_into
+                else ""
+            )
+            typer.echo(f"  - {entry.category} [{entry.category_type}] · {members}{suggest}")
+
+    _print_overview(proposals)
+    choice = typer.prompt("\n[looks good / reshape]", default="looks good").strip().lower()
+    if choice != "reshape":
+        return proposals
+
+    # Reshape inner loop — exits only on explicit "done".
+    while True:
+        action = (
+            typer.prompt("action [split/merge/rename/drop/add/done]", default="done")
+            .strip()
+            .lower()
+        )
+        if action == "done":
+            break
+        if action not in ("split", "merge", "rename", "drop", "add"):
+            typer.echo(f"unknown action {action!r}; try split/merge/rename/drop/add/done")
+            continue
+
+        change = _build_structure_change_from_prompts(action, proposals)
+        if change is None:
+            continue
+
+        proposals = apply_structure_change(change, proposals)
+        # Re-apply FR-014 ordering after each structural edit.
+        from bis.categories import order_for_walkthrough as _reorder
+
+        proposals = _reorder(proposals)
+        run = record_structure_change(run, change)
+        _print_overview(proposals)
+
+    return proposals
+
+
+def _build_structure_change_from_prompts(
+    action: str, proposals: list[CategoryProposal]
+) -> StructureChange | None:
+    """Prompt the user for the per-action payload and return a StructureChange.
+
+    Returns None when the user provides invalid input (e.g., target category
+    that doesn't exist); the caller re-prompts on the next iteration.
+    """
+
+    known = {p.category for p in proposals}
+
+    if action == "add":
+        new_name = typer.prompt("new category name").strip()
+        new_pick = typer.prompt("new pick (package)").strip()
+        cat_type = typer.prompt("new category type [language/framework/tooling]").strip().lower()
+        if cat_type not in ("language", "framework", "tooling"):
+            typer.echo(f"invalid category type {cat_type!r}")
+            return None
+        return StructureChange(
+            kind="add",
+            category=new_name,
+            new_pick=new_pick,
+            new_category_type=cast(CategoryType, cat_type),
+            applied_at_phase="confirm",
+        )
+
+    target = typer.prompt("target category").strip()
+    if target not in known:
+        typer.echo(f"unknown category {target!r}; known: {', '.join(sorted(known))}")
+        return None
+
+    if action == "split":
+        into_raw = typer.prompt(
+            "into (comma-separated category names, blank for suggest_split)", default=""
+        ).strip()
+        into = [s.strip() for s in into_raw.split(",") if s.strip()] if into_raw else None
+        return StructureChange(
+            kind="split",
+            category=target,
+            into=into,
+            applied_at_phase="confirm",
+        )
+
+    if action == "merge":
+        merge_with = typer.prompt("merge with category").strip()
+        if merge_with not in known:
+            typer.echo(f"unknown merge target {merge_with!r}")
+            return None
+        return StructureChange(
+            kind="merge",
+            category=target,
+            merge_with=merge_with,
+            applied_at_phase="confirm",
+        )
+
+    if action == "rename":
+        new_name = typer.prompt("new name").strip()
+        return StructureChange(
+            kind="rename",
+            category=target,
+            new_name=new_name,
+            applied_at_phase="confirm",
+        )
+
+    # action == "drop"
+    return StructureChange(kind="drop", category=target, applied_at_phase="confirm")
 
 
 def _interactive_walkthrough(
@@ -339,6 +489,9 @@ def init_mine(
             "deferred_categories_resurfaced": list(run.deferred_categories),
             "taxonomy_edits_replayed": edits_replayed,
             "pending_proposals_count": len(proposals),
+            "proposed_structure_overview": [
+                o.model_dump(mode="json") for o in build_structure_overview(proposals)
+            ],
         }
     )
 
@@ -349,6 +502,14 @@ def init_walk(
     on_existing: Annotated[
         str, typer.Option("--on-existing", help="merge | replace (forwarded to apply_decision).")
     ] = "merge",
+    skip_confirm: Annotated[
+        bool,
+        typer.Option(
+            "--skip-confirm",
+            help="US6 — skip the structure-confirmation step. Used by the skill flow "
+            "which already called `bis init taxonomy-review`.",
+        ),
+    ] = False,
 ) -> None:
     """Drive the local fast walk-through against `pending_proposals`.
 
@@ -357,6 +518,9 @@ def init_walk(
     writes `slots/{category}.yaml` for accept/change, clears
     `pending_proposals` on completion. Errors with `no_pending_proposals` when
     called before a prior `bis init mine`.
+
+    US6: by default a structure-confirmation step runs BEFORE the per-slot
+    walk-through. Pass `--skip-confirm` to bypass it (skill-flow parity).
     """
 
     run = read_bootstrap_run_state()
@@ -369,6 +533,17 @@ def init_walk(
 
     assert run is not None  # narrowed by _emit_error never returning
     proposals = list(run.pending_proposals)
+
+    # US6 — structure-confirmation step (bypassed when --skip-confirm).
+    if not skip_confirm:
+        proposals = _interactive_confirm_structure(proposals, run)
+        # Pick up any taxonomy_edits the confirm step persisted.
+        run = read_bootstrap_run_state() or run
+        # Re-sync pending_proposals so a Ctrl-C now (before the walk) resumes
+        # against the reshaped set rather than the pre-confirm set.
+        run = run.model_copy(update={"pending_proposals": proposals})
+        write_bootstrap_run_state(run)
+
     adapter = _make_walk_adapter()
     counts: dict[str, int] = {"accept": 0, "change": 0, "skip": 0, "defer": 0}
     written: list[str] = []
