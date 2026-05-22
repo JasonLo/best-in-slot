@@ -1,0 +1,16 @@
+[project]
+name = "uv-example"
+version = "0.1.0"
+description = "Minimal uv project."
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+uv-example = "uv_example.main:main"
+
+[build-system]
+requires = ["uv_build>=0.10"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = ""

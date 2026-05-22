@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.python-version
+*.egg-info/
+
+# uv
+# (uv.lock IS committed — intentionally not excluded)
+
+# Node / Bun
+node_modules/
+dist/
+build/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Streamlit
+.streamlit/
+
+# Gradio
+.gradio/
+
+# mkdocs
+site/
+
+# Astro
+.astro/
+
+# Jupyter
+.ipynb_checkpoints/
