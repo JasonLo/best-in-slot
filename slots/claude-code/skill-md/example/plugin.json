@@ -1,0 +1,6 @@
+{
+  "name": "hello-plugin",
+  "version": "0.1.0",
+  "description": "Minimal Claude Code plugin demonstrating skills + commands.",
+  "author": "Jason Lo"
+}
