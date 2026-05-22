@@ -86,6 +86,24 @@ The mine-and-propose phase and the confirm phase (i.e. User Story 1) are accessi
 
 ---
 
+### User Story 5 - Fast hand-off to a local walk-through (Priority: P1 — UX refinement on the MVP path)
+
+A user starts the bootstrap from `/bis-bootstrap` and expects the per-slot decisions to feel snappy — sub-second response between proposals — not 5–15 seconds per slot the way an LLM-driven conversational loop produces. The system splits the work along the FR-013 trust boundary: the LLM handles upfront mining + category-inference-on-unknowns (where its judgment is genuinely useful), then hands off to a local fast TTY walk-through driven by `questionary` (arrow keys + Enter, no LLM in the loop), then re-engages once at the end for batched `/deep-dive` chaining. From the user's perspective, a bootstrap session ends up costing ≤3 LLM turns instead of one-per-slot, and the per-slot decisions complete at native terminal speed.
+
+**Why this priority**: Reported as a current pain point on 2026-05-22: "current bis-bootstrap workflow is way too slow, user spend much time just waiting." The per-slot LLM loop adds no judgment value — the user already knows their preferred pick — but it costs 2–4 minutes of cumulative latency per session at typical scale (~12 slots × ~5–15s/turn). US5 collapses that latency to ≤30 seconds of LLM-active time per session by redistributing the work. P1 because it materially affects the existing MVP UX — every bootstrap session benefits immediately once shipped.
+
+**Independent Test**: From `/bis-bootstrap` against a fixture proposal set, verify (a) the conversation produces ≤3 LLM turns (mine → handoff → final summary), (b) per-slot decisions happen in a local `questionary` UI driven by keypresses, (c) system-side per-decision latency p95 < 200ms (measured via a deterministic walk adapter), (d) the resulting `slots/*.yaml` set is byte-identical to the prior LLM-in-loop flow modulo `decided_at` timestamps.
+
+**Acceptance Scenarios**:
+
+1. **Given** a proposed slot set produced by mining, **When** the bootstrap skill runs, **Then** it executes `bis init mine` once (one LLM turn), surfaces a one-line "Mined N proposals — hand off to local walk?" prompt (the user replies once), and `exec`s `bis init walk` in the user's terminal — at which point the LLM is out of the loop until the walk completes.
+2. **Given** the local `bis init walk` is running, **When** the user picks an action on a slot, **Then** the next slot's prompt appears with no perceptible delay (system-side latency < 200ms), and the user can drive accept/change/skip/defer entirely with arrow keys + Enter without typing free-form text unless they choose "change → freeform".
+3. **Given** the walk-through completes, **When** the skill re-engages, **Then** it reads `slots/.bootstrap.yaml` for the run summary and offers `/deep-dive` once over the full list of confirmed slots with a single `[all/none/select]` prompt — no per-slot deep-dive prompt.
+4. **Given** the user `Ctrl-C`s mid-walk, **When** they re-run `bis init walk` later, **Then** the same pending proposals are presented (no re-mining required) because `pending_proposals` was persisted into `slots/.bootstrap.yaml` by the earlier `bis init mine` call.
+5. **Given** a user runs the pure-CLI path (`bis init` with no flags), **When** they walk through the proposals, **Then** they see the same snappy `questionary` UX as the skill-driven path — the underlying `WalkController` is shared, the skill is purely a different entry point.
+
+---
+
 ### Edge Cases
 
 - **Sparse signal**: The user has very few repos in the 3-year window. Surface "low confidence — only N repos contributed" rather than fabricating slots from a single data point.
@@ -122,6 +140,10 @@ The mine-and-propose phase and the confirm phase (i.e. User Story 1) are accessi
 - **FR-018**: All structural changes applied during a run MUST be persisted as an append-only `taxonomy_edits` log in `slots/.bootstrap.yaml`. On the next bootstrap run, after fresh mining, the system MUST replay these edits against the new proposal set before presenting the walk-through — so an aborted-mid-reshape run resumes against the rebuilt taxonomy without re-prompting the user for the same structural decisions.
 - **FR-019**: Structural actions MUST preserve evidence: **merge** unions `evidence_repo_count` over disjoint contributing-repo sets (no naive sum that double-counts), `evidence_most_recent` = max, alternatives = ordered dedup union, `category_type` must match across merged inputs (mismatch is a user-facing error); **rename** is identity-on-evidence; **split** partitions evidence by member-package's heuristic sub-category; **drop** removes evidence with no residual; **add** carries user-supplied evidence (initialised as `evidence_repo_count = 1`, `most_recent = now`).
 - **FR-020**: Structural-action suggestions (e.g., `suggest_split` proposing how to partition a slot) MUST be **deterministic and local** — derived only from `bis/categories.py:CATEGORY_TABLE` and the in-memory proposal set. No structural-action helper MAY call the LLM. This preserves the FR-013 trust boundary (no new payload leaves the machine for structure decisions).
+- **FR-021**: The system MUST expose a mining-only CLI mode (`bis init mine --json`) that runs mining, proposal-building, and `taxonomy_edits` replay, persists the resulting proposal set into `slots/.bootstrap.yaml` under a `pending_proposals` field, and exits without entering the walk-through. This is the skill's handoff payload — the LLM uses it to produce a one-line summary, then surrenders control of the walk to the local CLI.
+- **FR-022**: The system MUST expose a fast local interactive walk-through (`bis init walk`) that reads `pending_proposals` from `slots/.bootstrap.yaml` (or from stdin via `--from-stdin`) and drives the per-slot decisions using a `questionary`-style TTY UX — arrow keys + Enter for action selection, free-form text input only when the user picks "change → freeform". System-side per-slot decision latency MUST be sub-second.
+- **FR-023**: The bootstrap skill (`skills/bis-bootstrap/SKILL.md`) MUST minimise LLM turns: ≤3 turns per session — one for mining, one for the handoff prompt, one for the final summary + batched `/deep-dive` offer. Per-slot conversational iteration during the walk-through is forbidden — that responsibility belongs to the local `bis init walk` command.
+- **FR-024**: The handoff transport MUST be process-level: the skill `exec`s `bis init walk` in the user's terminal (or instructs the user to run it) rather than driving the walk via tool calls. The resulting slot state MUST be byte-identical to a pure-CLI `bis init` run against the same proposal set, modulo `decided_at` timestamps and `run_id`. The trust-boundary invariant from FR-013 is unchanged: the handoff introduces no new LLM-bound payload type.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -144,6 +166,8 @@ The mine-and-propose phase and the confirm phase (i.e. User Story 1) are accessi
 - **SC-008**: A security-conscious user can run the bootstrap on a project containing private repos and confirm — by inspecting whatever the tool would send externally — that no raw repository content is included, 100% of the time.
 - **SC-009**: A user who restarts the bootstrap within 24 hours of a prior aborted run completes the mining phase in under 25% of the wall-clock time the first run took (i.e., the cache makes restarts substantively cheaper, not just incrementally so).
 - **SC-010**: A user whose proposed taxonomy needs at least one structural change (split, merge, rename, drop, or add) can complete that change conversationally — without editing `bis/categories.py` or any other source file — 100% of the time. Verified against the commit `3bc2482` reshape scenario: split `python-tooling` into 5 sub-slots end-to-end from the skill, no code edits.
+- **SC-011**: System-side per-slot decision latency in the local walk-through (`bis init walk`) is p95 < 200ms — measured from `WalkController.present_proposal` entry to `apply_decision` return, with a deterministic adapter that does not touch the TTY. Enforced by a CI regression test against a 20-proposal fixture.
+- **SC-012**: Total LLM-active wall-clock time in a `/bis-bootstrap` session is < 30 seconds for sessions with ≤15 slots — measured as the sum of (mining turn + handoff turn + summary turn). The prior conversational-loop baseline at the same scale is ≥2 minutes; SC-012 represents at least a 4× reduction in user-visible latency for the median session.
 
 ## Assumptions
 

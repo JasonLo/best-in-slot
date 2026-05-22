@@ -42,6 +42,8 @@ ErrorCode = Literal[
     "split_not_supported",
     "merge_incompatible_types",
     "no_prior_proposal",
+    "no_pending_proposals",
+    "walk_aborted",
 ]
 
 
@@ -237,6 +239,11 @@ class BootstrapRunState(_Strict):
     skipped_sources: list[SkippedSource] = Field(default_factory=list)
     on_existing_choice: Literal["merge", "replace", "skip"] | None = None
     taxonomy_edits: list[StructureChange] = Field(default_factory=list)
+    # US5: proposals from the most recent `bis init mine` call, awaiting a
+    # `bis init walk` handoff. Overwritten on each mine; cleared on each walk
+    # completion. Append-only invariant does NOT apply (this is run-scoped
+    # ephemeral state, not history).
+    pending_proposals: list[CategoryProposal] = Field(default_factory=list)
 
 
 # --------------------------------------------------------------------------- CLI error envelope

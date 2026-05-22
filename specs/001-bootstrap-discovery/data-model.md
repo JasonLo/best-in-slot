@@ -227,9 +227,14 @@ class BootstrapRunState(BaseModel):
                                    # applied during this run. Replayed on next bootstrap so
                                    # an aborted-mid-reshape run resumes against the rebuilt
                                    # taxonomy without re-prompting the user for the same edits.
+    pending_proposals: list[CategoryProposal] = []
+                                   # US5 (FR-021): proposals from the most recent `bis init mine`
+                                   # call, awaiting a `bis init walk` handoff. Overwritten on each
+                                   # mine; cleared on each walk completion. NOT append-only —
+                                   # this is run-scoped ephemeral state, not history.
 ```
 
-**Invariant**: `taxonomy_edits` is append-only (same enforcement shape as `SlotState.history` — `bis/slots.py` exposes `append_taxonomy_edit`, never `edit_taxonomy_edit`).
+**Invariant**: `taxonomy_edits` is append-only (same enforcement shape as `SlotState.history` — `bis/slots.py` exposes `append_taxonomy_edit`, never `edit_taxonomy_edit`). `pending_proposals` is the only field NOT append-only — it is overwritten each `bis init mine` and cleared each `bis init walk`.
 
 ---
 

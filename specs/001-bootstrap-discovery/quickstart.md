@@ -9,28 +9,35 @@
 
 ---
 
-## First run (CLI)
+## First run (CLI — one-shot)
 
 ```bash
 uv sync                            # install pinned deps
-uv run bis init               # interactive walk-through
+uv run bis init               # interactive walk-through (mine + walk in one shot)
 ```
 
 What you'll see:
 
 1. **Mining phase** — progress like `Scanning owner/repo (12/47)…`. First run takes a few minutes for ≤50 repos; subsequent runs within 24h hit the cache and finish in seconds (SC-009).
 2. **Existing-state check** — if any `slots/*.yaml` files already exist, the CLI pauses and asks `merge / replace / skip`. Pick one explicitly.
-3. **Walk-through** — proposals appear one slot at a time, in the order: languages → frameworks → tooling. For each:
-   ```
-   [3/12] python-web — proposed pick: fastapi
-          evidence: 8 repos, most recent 2026-04-12
-          alternatives observed: django, litestar
-   
-          action? [a]ccept / [c]hange / [s]kip / [d]efer >
-   ```
-   Pick `c` to type any package name (observed or not — Q1 clarification).
+3. **Walk-through** — proposals appear one slot at a time, in the order: languages → frameworks → tooling. Powered by `questionary` (arrow keys + Enter, sub-second per-slot latency — SC-011). Pick `change pick` to type any package name (observed or not — Q1 clarification).
 4. **Per-slot deep-dive offer** — after each accept/change: `Run /deep-dive on this slot now? [y/n/a=all-later/x=skip-all]`. `/deep-dive` is invoked by the skill layer; in raw CLI mode this offer can be skipped with `--no-deep-dive-prompt`.
 5. **Run summary** — counts of accepted/changed/skipped/deferred, plus any skipped sources (FR-008).
+
+---
+
+## First run (CLI — two-step mine + walk, US5)
+
+For scripted/skill use, the two-step flow gives you a clean handoff point between the mining stage (where the LLM helps with category inference on unknowns) and the walk-through (where the LLM is out of the loop entirely):
+
+```bash
+uv run bis init mine --json   # mine + propose; persists slots/.bootstrap.yaml; emits proposals
+uv run bis init walk          # fast local walk-through over the persisted proposals
+```
+
+Why split it? **Speed.** When `/bis-bootstrap` drove the per-slot loop conversationally, every accept/change/skip/defer cost one LLM turn (~5–15s × ~12 slots = 2–4 min of waiting). With `mine` + `walk`, the LLM is involved once (mining), then you drive the picks at native CLI speed. Target: ≤30s total LLM-active wall-clock per session (SC-012), and p95 < 200ms per-slot decision latency (SC-011).
+
+`bis init walk` is idempotent and resumable — if you `Ctrl-C` mid-walk, `pending_proposals` is preserved in `slots/.bootstrap.yaml` and re-running `bis init walk` picks up where you left off (no re-mining).
 
 ---
 
@@ -42,7 +49,7 @@ In Claude Code:
 /bis-bootstrap
 ```
 
-Same flow, but the walk-through happens in conversation. The skill calls `bis init --json --batch` once to get the proposals, then walks you through them. Deep-dive prompts use the existing `/deep-dive` skill seamlessly.
+The skill uses the two-step `mine` + `walk` flow above. Total LLM turns per session: ≤3 (mine → handoff prompt → final summary + batched `/deep-dive` offer). The per-slot walk happens in your terminal — the skill steps out of the way during it.
 
 ---
 

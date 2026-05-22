@@ -3,6 +3,15 @@
 The CLI stays thin: argument parsing, JSON envelope construction, and prompt
 loops. Orchestration logic lives in `bis.bootstrap`.
 
+Two recommended invocation patterns:
+
+- **One-shot (terminal users):** ``bis init`` runs mining + walk-through inline
+  with the `questionary` UX, no extra steps.
+- **Two-step (skill-driven sessions):** ``bis init mine --json`` produces the
+  proposal set and persists it into ``slots/.bootstrap.yaml``; ``bis init walk``
+  then drives the fast local walk-through. This is the US5 hand-off pattern —
+  it keeps the LLM out of the per-slot loop so picks happen at native CLI speed.
+
 Output contract (machine-readable modes) is validated against
 `specs/001-bootstrap-discovery/contracts/bootstrap.schema.json`.
 """
@@ -25,6 +34,7 @@ from bis.bootstrap import (
     proposals_for_walkthrough,
     record_deferral,
     record_structure_change,
+    replay_taxonomy_edits,
     start_run_state,
 )
 from bis.categories import suggest_split
@@ -43,7 +53,8 @@ from bis.models import (
     StructureChange,
     StructureKind,
 )
-from bis.slots import read_bootstrap_run_state, write_slot_state
+from bis.slots import read_bootstrap_run_state, write_bootstrap_run_state, write_slot_state
+from bis.walk import QuestionaryAdapter, WalkAdapter, WalkController
 
 app = typer.Typer(
     name="bis",
@@ -197,45 +208,205 @@ def _interactive_walkthrough(
     on_existing: str,
     dry_run: bool,
 ) -> None:
+    """Drive the per-slot walk-through via the shared ``WalkController``.
+
+    Terminal users of `bis init` (no flags) hit this path; the skill's hand-off
+    routes through `bis init walk` instead — both use the same controller, so
+    the UX is identical.
+    """
+
     if not proposals:
         typer.echo("No proposals to walk through.")
         return
 
     typer.echo(f"Walk-through: {len(proposals)} slot(s) to review.")
-    for idx, p in enumerate(proposals, 1):
-        typer.echo("")
-        typer.echo(f"[{idx}/{len(proposals)}] {p.category} — proposed pick: {p.proposed_pick}")
-        typer.echo(
-            f"        evidence: {p.evidence_repo_count} repos, most recent {p.evidence_most_recent.date()}"
-            + (f" ({p.confidence_qualifier})" if p.confidence_qualifier else "")
-        )
-        if p.alternatives:
-            typer.echo(f"        alternatives: {', '.join(p.alternatives)}")
-        action = (
-            typer.prompt("        action? [a]ccept / [c]hange / [s]kip / [d]efer", default="a")
-            .strip()
-            .lower()
-        )
-        if action.startswith("d"):
-            run = record_deferral(run, p.category)
-            continue
-        if action.startswith("s"):
-            clear_deferral(run, p.category)
-            continue
-        chosen = p.proposed_pick
-        if action.startswith("c"):
-            chosen = (
-                typer.prompt("        new pick (type any package name)").strip() or p.proposed_pick
+    adapter = _make_walk_adapter()
+
+    def _on_decision(idx: int, decision: SlotDecision) -> None:
+        proposal = proposals[idx]
+        if decision.action == "defer":
+            typer.echo(f"  [{idx + 1}/{len(proposals)}] {proposal.category} — deferred")
+        elif decision.action == "skip":
+            typer.echo(f"  [{idx + 1}/{len(proposals)}] {proposal.category} — skipped")
+        else:
+            typer.echo(
+                f"  [{idx + 1}/{len(proposals)}] {proposal.category} → "
+                f"{decision.chosen_pick} ({decision.action})"
             )
-        decision = SlotDecision(
-            category=p.category,
-            action="accept" if action.startswith("a") else "change",
-            chosen_pick=chosen,
-            was_proposal_unchanged=(chosen == p.proposed_pick),
+
+    for decision in WalkController(proposals, adapter, on_decision=_on_decision).run():
+        proposal = next(p for p in proposals if p.category == decision.category)
+        if decision.action == "defer":
+            run = record_deferral(run, decision.category)
+        elif decision.action == "skip":
+            clear_deferral(run, decision.category)
+        else:
+            if not dry_run:
+                apply_decision(decision, proposal, on_existing=on_existing)
+            clear_deferral(run, decision.category)
+
+
+# --------------------------------------------------------------------------- US5 mine + walk subcommands
+
+
+def _make_walk_adapter() -> WalkAdapter:
+    """Factory for the production walk adapter. Tests monkeypatch this seam to
+    inject a ``ScriptedAdapter`` instead of touching the real TTY.
+    """
+
+    return QuestionaryAdapter()
+
+
+@init_app.command("mine")
+def init_mine(
+    json_mode: Annotated[bool, typer.Option("--json", help="Emit JSON output.")] = True,
+    on_existing: Annotated[
+        str | None,
+        typer.Option(
+            "--on-existing",
+            help="merge / replace / skip — required when slots already exist.",
+        ),
+    ] = None,
+) -> None:
+    """Mine GitHub repo history → propose slots → persist as `pending_proposals`.
+
+    US5 hand-off step: this is the LLM-touching half of the bootstrap. The skill
+    runs this once, then hands off to `bis init walk` for the snappy local
+    per-slot walk-through. Writes no `slots/{category}.yaml`; the walk does
+    that.
+    """
+
+    settings = load_settings()
+    existing = detect_existing_state()
+    if existing and on_existing is None:
+        _emit_error(
+            "existing_state_unresolved",
+            f"slots already exist for: {', '.join(existing)}",
+            hint="re-run with --on-existing={merge,replace,skip}",
         )
-        if not dry_run:
-            apply_decision(decision, p, on_existing=on_existing)
-        clear_deferral(run, p.category)
+    if on_existing not in (None, "merge", "replace", "skip"):
+        _emit_error("existing_state_unresolved", f"invalid --on-existing={on_existing!r}")
+
+    # Capture any prior taxonomy_edits before start_run_state wipes them, so
+    # we can replay against the freshly-mined proposal set (FR-018).
+    prior = read_bootstrap_run_state()
+    prior_edits = list(prior.taxonomy_edits) if prior else []
+
+    run = start_run_state(
+        on_existing_choice=cast("Literal['merge', 'replace', 'skip'] | None", on_existing)
+    )
+
+    # Restore taxonomy_edits onto the new run so replay is durable across mine→walk.
+    if prior_edits:
+        run = run.model_copy(update={"taxonomy_edits": prior_edits})
+        write_bootstrap_run_state(run)
+
+    try:
+        profile = mine_profile(settings)
+    except Exception as exc:  # noqa: BLE001 — surface as scanner_failed
+        _emit_error("scanner_failed", str(exc))
+
+    auth_skip = next((s for s in profile.skipped_sources if s.source_id == "auth"), None)
+    if auth_skip:
+        _emit_error("gh_auth_missing", auth_skip.reason, hint="run `gh auth login`")
+
+    if not profile.repos:
+        _emit_error(
+            "no_repos_in_window",
+            "no repository activity found in the mining window",
+            hint="broaden the window in settings.yaml or seed slots manually",
+        )
+
+    proposals = proposals_for_walkthrough(profile, deferred=run.deferred_categories)
+
+    edits_replayed = 0
+    if prior_edits:
+        proposals = replay_taxonomy_edits(proposals, prior_edits)
+        edits_replayed = len(prior_edits)
+
+    # Persist the proposal set for the walk-through handoff.
+    run = run.model_copy(update={"pending_proposals": proposals})
+    write_bootstrap_run_state(run)
+
+    _emit_json(
+        {
+            "mode": "mine",
+            "run_id": run.run_id,
+            "started_at": run.started_at,
+            "proposals": [_proposal_to_dict(p) for p in proposals],
+            "skipped_sources": [s.model_dump() for s in profile.skipped_sources],
+            "on_existing_choice": on_existing,
+            "deferred_categories_resurfaced": list(run.deferred_categories),
+            "taxonomy_edits_replayed": edits_replayed,
+            "pending_proposals_count": len(proposals),
+        }
+    )
+
+
+@init_app.command("walk")
+def init_walk(
+    json_mode: Annotated[bool, typer.Option("--json", help="Emit JSON output.")] = True,
+    on_existing: Annotated[
+        str, typer.Option("--on-existing", help="merge | replace (forwarded to apply_decision).")
+    ] = "merge",
+) -> None:
+    """Drive the local fast walk-through against `pending_proposals`.
+
+    US5: reads the proposal set persisted by `bis init mine`, asks the user one
+    action per slot via `questionary` (arrow keys + Enter, sub-second latency),
+    writes `slots/{category}.yaml` for accept/change, clears
+    `pending_proposals` on completion. Errors with `no_pending_proposals` when
+    called before a prior `bis init mine`.
+    """
+
+    run = read_bootstrap_run_state()
+    if run is None or not run.pending_proposals:
+        _emit_error(
+            "no_pending_proposals",
+            "no proposals are queued for the walk-through",
+            hint="run `bis init mine` first to mine + persist proposals",
+        )
+
+    assert run is not None  # narrowed by _emit_error never returning
+    proposals = list(run.pending_proposals)
+    adapter = _make_walk_adapter()
+    counts: dict[str, int] = {"accept": 0, "change": 0, "skip": 0, "defer": 0}
+    written: list[str] = []
+
+    try:
+        for decision in WalkController(proposals, adapter).run():
+            counts[decision.action] = counts.get(decision.action, 0) + 1
+            proposal = next(p for p in proposals if p.category == decision.category)
+            if decision.action in ("accept", "change"):
+                path = apply_decision(decision, proposal, on_existing=on_existing)
+                if path is not None:
+                    written.append(str(path))
+                clear_deferral(run, decision.category)
+            elif decision.action == "defer":
+                run = record_deferral(run, decision.category)
+            elif decision.action == "skip":
+                clear_deferral(run, decision.category)
+    except KeyboardInterrupt:
+        _emit_error(
+            "walk_aborted",
+            "walk-through aborted; pending_proposals preserved for resume",
+            hint="re-run `bis init walk` to continue",
+        )
+
+    # Clear pending proposals on successful completion and end the run.
+    run = read_bootstrap_run_state() or run
+    run = run.model_copy(update={"pending_proposals": []})
+    write_bootstrap_run_state(run)
+    end_run_state(run, run.skipped_sources)
+
+    _emit_json(
+        {
+            "mode": "walk",
+            "run_id": run.run_id,
+            "decisions_count": counts,
+            "slot_yamls_written": written,
+        }
+    )
 
 
 # --------------------------------------------------------------------------- confirm subcommand

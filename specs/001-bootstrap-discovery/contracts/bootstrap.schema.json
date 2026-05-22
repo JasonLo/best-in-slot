@@ -246,7 +246,9 @@
                 "unknown_category",
                 "split_not_supported",
                 "merge_incompatible_types",
-                "no_prior_proposal"
+                "no_prior_proposal",
+                "no_pending_proposals",
+                "walk_aborted"
               ]
             },
             "message": { "type": "string", "minLength": 1 },
