@@ -13,7 +13,14 @@ from pathlib import Path
 from typing import Literal
 
 from bis.cache import get_cached_scan, put_cached_scan
-from bis.categories import build_proposals, order_for_walkthrough
+from bis.categories import (
+    apply_drop,
+    apply_rename,
+    build_proposals,
+    merge_proposals,
+    order_for_walkthrough,
+    suggest_split,
+)
 from bis.config import Settings
 from bis.github import (
     GhUnavailable,
@@ -35,11 +42,13 @@ from bis.models import (
     SkippedSource,
     SlotDecision,
     SlotState,
+    StructureChange,
     ToolSignal,
 )
 from bis.privacy import SCANNER_VERSION
 from bis.scanner import scan_manifest
 from bis.slots import (
+    append_taxonomy_edit,
     list_existing_slot_categories,
     read_bootstrap_run_state,
     read_slot_state,
@@ -285,14 +294,152 @@ def end_run_state(state: BootstrapRunState, skipped: list[SkippedSource]) -> Boo
     return state
 
 
+# --------------------------------------------------------------------------- US4 structural changes
+
+
+def apply_structure_change(
+    change: StructureChange, proposals: list[CategoryProposal]
+) -> list[CategoryProposal]:
+    """Apply one StructureChange to a proposal list. Pure on the input list.
+
+    - split: replace the target proposal with suggest_split's sub-proposals, or
+      with explicit `change.into` when provided.
+    - merge: collapse target into change.merge_with using merge_proposals.
+    - rename: change.category → change.new_name.
+    - drop: remove change.category.
+    - add: append a synthetic proposal built from change.new_pick + type.
+
+    Missing targets (e.g., after a re-mine produced a different set) are
+    silently skipped so resume stays robust per the resume tests.
+    """
+
+    by_category = {p.category: p for p in proposals}
+
+    if change.kind == "split":
+        target = by_category.get(change.category)
+        if target is None:
+            return list(proposals)
+        subs = _explicit_split(target, change.into) if change.into else suggest_split(target)
+        if not subs:
+            return list(proposals)
+        new = [p for p in proposals if p.category != change.category]
+        new.extend(subs)
+        return new
+
+    if change.kind == "merge":
+        assert change.merge_with is not None  # validator enforces
+        a = by_category.get(change.category)
+        b = by_category.get(change.merge_with)
+        if a is None or b is None:
+            return list(proposals)
+        # Target absorbs `a`; result keeps `b`'s category name.
+        # merge_proposals takes (first, *rest); first's category survives.
+        merged = merge_proposals(b, a)
+        new = [p for p in proposals if p.category not in {change.category, change.merge_with}]
+        new.append(merged)
+        return new
+
+    if change.kind == "rename":
+        assert change.new_name is not None
+        target = by_category.get(change.category)
+        if target is None:
+            return list(proposals)
+        renamed = apply_rename(target, change.new_name)
+        return [renamed if p.category == change.category else p for p in proposals]
+
+    if change.kind == "drop":
+        return apply_drop(proposals, change.category)
+
+    if change.kind == "add":
+        assert change.new_pick is not None and change.new_category_type is not None
+        if change.category in by_category:
+            return list(proposals)
+        added = CategoryProposal(
+            category=change.category,
+            category_type=change.new_category_type,
+            proposed_pick=change.new_pick,
+            alternatives=[],
+            evidence_repo_count=1,
+            evidence_most_recent=change.applied_at,
+            evidence_strength=0.0,
+            confidence_qualifier="low",
+        )
+        return [*proposals, added]
+
+    # Exhaustive — StructureKind Literal covers all cases.
+    return list(proposals)
+
+
+def _explicit_split(target: CategoryProposal, into: list[str]) -> list[CategoryProposal]:
+    """User-supplied partition: produce N sub-proposals named per `into`.
+
+    Each sub gets a 1/N share of the parent's evidence; members are not
+    repartitioned (the heuristic table can't know which member belongs in a
+    user-named sub-category). The user can correct the picks afterward via
+    `change` actions.
+    """
+
+    n = len(into)
+    base_count = max(1, target.evidence_repo_count // n)
+    base_strength = target.evidence_strength / n
+    out: list[CategoryProposal] = []
+    for sub_name in into:
+        out.append(
+            CategoryProposal(
+                category=sub_name,
+                category_type=target.category_type,
+                proposed_pick=target.proposed_pick,
+                alternatives=list(target.alternatives),
+                evidence_repo_count=base_count,
+                evidence_most_recent=target.evidence_most_recent,
+                evidence_strength=base_strength,
+                confidence_qualifier="low",
+            )
+        )
+    return out
+
+
+def replay_taxonomy_edits(
+    proposals: list[CategoryProposal], edits: list[StructureChange]
+) -> list[CategoryProposal]:
+    """Apply a sequence of StructureChanges to a proposal list, in order.
+
+    Used on resume (FR-018): after a fresh mining pass, the cached edits in
+    BootstrapRunState.taxonomy_edits are replayed so the user picks up the
+    walk-through against the rebuilt taxonomy without re-confirming the
+    structural decisions.
+
+    Missing targets are skipped silently — see apply_structure_change.
+    """
+
+    out = list(proposals)
+    for edit in edits:
+        out = apply_structure_change(edit, out)
+    return out
+
+
+def record_structure_change(state: BootstrapRunState, change: StructureChange) -> BootstrapRunState:
+    """Persist a StructureChange into the run state's taxonomy_edits log.
+
+    Append-only: existing entries are never edited or removed.
+    """
+
+    append_taxonomy_edit(change)
+    state = state.model_copy(update={"taxonomy_edits": [*state.taxonomy_edits, change]})
+    return state
+
+
 __all__ = [
     "apply_decision",
+    "apply_structure_change",
     "clear_deferral",
     "detect_existing_state",
     "end_run_state",
     "mine_profile",
     "proposals_for_walkthrough",
     "record_deferral",
+    "record_structure_change",
+    "replay_taxonomy_edits",
     "start_run_state",
     "walkthrough_iter",
 ]

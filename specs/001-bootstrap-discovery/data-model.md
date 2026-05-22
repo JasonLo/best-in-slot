@@ -110,20 +110,47 @@ class SafePayload(BaseModel):
 ## Decision-phase models
 
 ### `SlotDecision`
-The user's response to one `CategoryProposal`. Emitted by `bis bootstrap confirm ...` as JSON; persisted into `SlotState.history`.
+The user's response to one `CategoryProposal`. Emitted by `bis bootstrap confirm ...` as JSON. Pick actions (`accept`, `change`) persist into `SlotState.history`; structure actions (`split`, `merge`, `rename`, `drop`, `add`) are translated into a `StructureChange` (see below) and persist into `BootstrapRunState.taxonomy_edits`. `skip`/`defer` persist into `BootstrapRunState` only.
 
 ```python
 class SlotDecision(BaseModel):
     category: str
-    action: Literal["accept", "change", "skip", "defer"]
-    chosen_pick: str | None        # required when action in {"accept", "change"}
+    action: Literal["accept", "change", "skip", "defer", "split", "merge", "rename", "drop", "add"]
+    chosen_pick: str | None        # required when action in {"accept", "change", "add"}
+    into: list[str] | None         # split: optional sub-category names; None = use suggest_split
+    merge_with: str | None         # merge: target category to fold into
+    new_name: str | None           # rename: new category label
+    new_category_type: Literal["language", "framework", "tooling"] | None  # add: type tag for new slot
     was_proposal_unchanged: bool   # True iff action=="accept" or (action=="change" and chosen_pick==proposal.proposed_pick)
     decided_at: datetime
 ```
 
-Validators:
-- `action in {"accept", "change"}` requires `chosen_pick is not None`.
-- `action in {"skip", "defer"}` requires `chosen_pick is None`.
+Validators (per-action aux requirements):
+- `action in {"accept", "change", "add"}` requires `chosen_pick is not None`.
+- `action in {"skip", "defer", "split", "merge", "rename", "drop"}` requires `chosen_pick is None`.
+- `action == "merge"` requires `merge_with is not None`.
+- `action == "rename"` requires `new_name is not None`.
+- `action == "add"` requires `new_category_type is not None`.
+- `action == "split"` accepts `into = None` (CLI/skill resolves via `suggest_split`) OR `into` with ≥ 2 distinct names.
+
+### `StructureChange`  *(US4 / FR-016, FR-018)*
+A single structural edit applied to the proposal set during bootstrap. Append-only audit trail; persisted into `BootstrapRunState.taxonomy_edits` so the next bootstrap run can replay them after fresh mining (FR-018).
+
+```python
+class StructureChange(BaseModel):
+    kind: Literal["split", "merge", "rename", "drop", "add"]
+    category: str                  # the proposal being acted on; for `add`, this is the new slot's name
+    into: list[str] | None         # split only — resolved names (auto-suggest or user-supplied)
+    merge_with: str | None         # merge only — target category that absorbs this one
+    new_name: str | None           # rename only — new category label
+    new_pick: str | None           # add only — chosen package for the custom slot
+    new_category_type: Literal["language", "framework", "tooling"] | None  # add only
+    applied_at: datetime
+```
+
+**Invariant**: structure changes preserve evidence (FR-019). `merge_proposals` unions `evidence_repo_count`/alternatives/`evidence_most_recent` over disjoint contributing-repo sets; `apply_rename` is identity-on-evidence; `apply_split` partitions evidence by member-package's heuristic sub-category.
+
+**Trust-boundary note (FR-020)**: `suggest_split` and the merge/rename/drop helpers are **deterministic** — they read only from `CATEGORY_TABLE` and the in-memory proposal set. No LLM call is involved in any structure action. This is enforced by keeping the helpers in `bis/categories.py` outside the `infer_categories_via_llm` path.
 
 **State transition diagram**:
 
@@ -195,7 +222,14 @@ class BootstrapRunState(BaseModel):
     skipped_sources: list[SkippedSource]
     on_existing_choice: Literal["merge", "replace", "skip"] | None
                                    # populated only when slots already existed at run start
+    taxonomy_edits: list[StructureChange] = []
+                                   # US4 (FR-018): append-only audit log of structural changes
+                                   # applied during this run. Replayed on next bootstrap so
+                                   # an aborted-mid-reshape run resumes against the rebuilt
+                                   # taxonomy without re-prompting the user for the same edits.
 ```
+
+**Invariant**: `taxonomy_edits` is append-only (same enforcement shape as `SlotState.history` — `bis/slots.py` exposes `append_taxonomy_edit`, never `edit_taxonomy_edit`).
 
 ---
 
@@ -232,6 +266,7 @@ class BootstrapRunState(BaseModel):
 | `CachedRepoScan` | `scanner_version` bumped on output-shape change; mismatched version → cache miss. |
 | `CategoryProposal` | `confidence_qualifier` auto-set from `evidence_repo_count` + alternatives spread. |
 | `SafePayload` | Fields are an allow-list; adding a field requires reviewing FR-013. |
-| `SlotDecision` | `chosen_pick` presence keyed to `action` (validator). |
+| `SlotDecision` | `chosen_pick` presence keyed to `action` (validator); structure actions have per-kind aux-field requirements. |
+| `StructureChange` | Per-kind aux fields required (e.g., `merge` ⇒ `merge_with`); `applied_at` is tz-aware UTC; append-only via `slots.append_taxonomy_edit`. |
 | `SlotState` | `history` is append-only (enforced by `slots.py` API; raw YAML edits will round-trip but break history invariant). |
-| `BootstrapRunState` | `on_existing_choice` required iff slots existed at run start. |
+| `BootstrapRunState` | `on_existing_choice` required iff slots existed at run start; `taxonomy_edits` append-only. |

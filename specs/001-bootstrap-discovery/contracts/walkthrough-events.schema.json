@@ -4,6 +4,72 @@
   "title": "Walk-through event stream (skill ⇄ user, in conversation)",
   "description": "Logical event types the bootstrap skill emits to the user, and the response shapes it accepts. Not a wire protocol — these events are rendered as conversation turns. Documented here so the contract is reviewable and downstream UI variants can stay aligned.",
   "$defs": {
+    "TaxonomyReviewPresented": {
+      "type": "object",
+      "required": ["event", "proposals"],
+      "additionalProperties": false,
+      "properties": {
+        "event": { "const": "taxonomy_review_presented" },
+        "proposals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["category", "category_type", "proposed_pick", "members"],
+            "additionalProperties": false,
+            "properties": {
+              "category": { "type": "string" },
+              "category_type": { "enum": ["language", "framework", "tooling"] },
+              "proposed_pick": { "type": "string" },
+              "members": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "suggest_split_into": {
+                "type": ["array", "null"],
+                "items": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "StructureActionOffered": {
+      "type": "object",
+      "required": ["event", "category", "available_actions"],
+      "additionalProperties": false,
+      "properties": {
+        "event": { "const": "structure_action_offered" },
+        "category": { "type": "string" },
+        "available_actions": {
+          "type": "array",
+          "items": { "enum": ["split", "merge", "rename", "drop", "add"] }
+        },
+        "suggest_split_into": {
+          "type": ["array", "null"],
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "StructureActionApplied": {
+      "type": "object",
+      "required": ["event", "kind", "category"],
+      "additionalProperties": false,
+      "properties": {
+        "event": { "const": "structure_action_applied" },
+        "kind": { "enum": ["split", "merge", "rename", "drop", "add"] },
+        "category": { "type": "string" },
+        "into": {
+          "type": ["array", "null"],
+          "items": { "type": "string" }
+        },
+        "merge_with": { "type": ["string", "null"] },
+        "new_name": { "type": ["string", "null"] },
+        "new_pick": { "type": ["string", "null"] },
+        "new_category_type": {
+          "enum": ["language", "framework", "tooling", null]
+        }
+      }
+    },
     "ProposalPresented": {
       "type": "object",
       "required": ["event", "category", "category_type", "proposed_pick", "alternatives", "evidence", "queue_position"],
@@ -39,7 +105,7 @@
           "type": "object",
           "required": ["action"],
           "properties": {
-            "action": { "enum": ["accept", "skip", "defer"] }
+            "action": { "enum": ["accept", "skip", "defer", "drop"] }
           },
           "additionalProperties": false
         },
@@ -50,6 +116,55 @@
             "action": { "const": "change" },
             "chosen_pick": { "type": "string", "minLength": 1 },
             "source": { "enum": ["from_observed", "free_form"] }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["action"],
+          "properties": {
+            "action": { "const": "split" },
+            "into": {
+              "type": ["array", "null"],
+              "items": { "type": "string", "minLength": 1 },
+              "minItems": 2
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["action", "merge_with"],
+          "properties": {
+            "action": { "const": "merge" },
+            "merge_with": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["action", "new_name"],
+          "properties": {
+            "action": { "const": "rename" },
+            "new_name": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["action", "new_category"],
+          "properties": {
+            "action": { "const": "add" },
+            "new_category": {
+              "type": "object",
+              "required": ["name", "category_type", "pick"],
+              "additionalProperties": false,
+              "properties": {
+                "name": { "type": "string", "minLength": 1 },
+                "category_type": { "enum": ["language", "framework", "tooling"] },
+                "pick": { "type": "string", "minLength": 1 }
+              }
+            }
           },
           "additionalProperties": false
         }
@@ -110,11 +225,25 @@
               "error": { "type": "string" }
             }
           }
+        },
+        "taxonomy_edits": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "split": { "type": "integer", "minimum": 0 },
+            "merge": { "type": "integer", "minimum": 0 },
+            "rename": { "type": "integer", "minimum": 0 },
+            "drop": { "type": "integer", "minimum": 0 },
+            "add": { "type": "integer", "minimum": 0 }
+          }
         }
       }
     }
   },
   "oneOf": [
+    { "$ref": "#/$defs/TaxonomyReviewPresented" },
+    { "$ref": "#/$defs/StructureActionOffered" },
+    { "$ref": "#/$defs/StructureActionApplied" },
     { "$ref": "#/$defs/ProposalPresented" },
     { "$ref": "#/$defs/UserResponse" },
     { "$ref": "#/$defs/DecisionApplied" },

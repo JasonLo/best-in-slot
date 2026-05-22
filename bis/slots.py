@@ -15,7 +15,7 @@ from pathlib import Path
 
 import yaml
 
-from bis.models import BootstrapRunState, HistoryEntry, SlotState
+from bis.models import BootstrapRunState, HistoryEntry, SlotState, StructureChange
 
 _BOOTSTRAP_FILE = ".bootstrap.yaml"
 
@@ -99,8 +99,29 @@ def write_bootstrap_run_state(state: BootstrapRunState) -> Path:
     return path
 
 
+def append_taxonomy_edit(change: StructureChange) -> Path:
+    """Append a StructureChange to BootstrapRunState.taxonomy_edits.
+
+    Append-only — there is no `edit_taxonomy_edit` or `delete_taxonomy_edit`.
+    Constitution Principle II / FR-018: structural decisions are an
+    auditable, replayable log.
+
+    Raises ValueError when no bootstrap run state exists (the run must be
+    started first via `bootstrap.start_run_state`).
+    """
+
+    state = read_bootstrap_run_state()
+    if state is None:
+        raise ValueError(
+            "no bootstrap run in progress; call start_run_state() before recording edits"
+        )
+    state = state.model_copy(update={"taxonomy_edits": [*state.taxonomy_edits, change]})
+    return write_bootstrap_run_state(state)
+
+
 __all__ = [
     "append_history",
+    "append_taxonomy_edit",
     "list_existing_slot_categories",
     "read_bootstrap_run_state",
     "read_slot_state",

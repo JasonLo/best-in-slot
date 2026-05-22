@@ -13,11 +13,23 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 CategoryType = Literal["language", "framework", "tooling"]
-DecisionAction = Literal["accept", "change", "skip", "defer"]
+DecisionAction = Literal[
+    "accept",
+    "change",
+    "skip",
+    "defer",
+    "split",
+    "merge",
+    "rename",
+    "drop",
+    "add",
+]
+StructureKind = Literal["split", "merge", "rename", "drop", "add"]
 HistoryAction = Literal[
     "bootstrap-accept",
     "bootstrap-change",
     "bootstrap-replace",
+    "bootstrap-add",
     "switch",
 ]
 ConfidenceQualifier = Literal["high", "medium", "low", "conflicting"]
@@ -26,6 +38,10 @@ ErrorCode = Literal[
     "no_repos_in_window",
     "gh_auth_missing",
     "scanner_failed",
+    "unknown_category",
+    "split_not_supported",
+    "merge_incompatible_types",
+    "no_prior_proposal",
 ]
 
 
@@ -128,15 +144,57 @@ class SlotDecision(_Strict):
     category: str = Field(min_length=1)
     action: DecisionAction
     chosen_pick: str | None = None
+    # Structure-action aux fields (US4). Each is required only when `action`
+    # matches; the validator below enforces per-action requirements.
+    into: list[str] | None = None
+    merge_with: str | None = None
+    new_name: str | None = None
+    new_category_type: CategoryType | None = None
     was_proposal_unchanged: bool
     decided_at: datetime = Field(default_factory=_utc_now)
 
     @model_validator(mode="after")
     def _check_pick(self) -> SlotDecision:
-        if self.action in ("accept", "change") and not self.chosen_pick:
+        pick_actions = {"accept", "change", "add"}
+        nopick_actions = {"skip", "defer", "split", "merge", "rename", "drop"}
+        if self.action in pick_actions and not self.chosen_pick:
             raise ValueError(f"action={self.action!r} requires chosen_pick")
-        if self.action in ("skip", "defer") and self.chosen_pick is not None:
+        if self.action in nopick_actions and self.chosen_pick is not None:
             raise ValueError(f"action={self.action!r} forbids chosen_pick")
+        if self.action == "merge" and not self.merge_with:
+            raise ValueError("action='merge' requires merge_with")
+        if self.action == "rename" and not self.new_name:
+            raise ValueError("action='rename' requires new_name")
+        if self.action == "add" and self.new_category_type is None:
+            raise ValueError("action='add' requires new_category_type")
+        return self
+
+
+class StructureChange(_Strict):
+    """Append-only audit record of one structural change to the proposal set (US4).
+
+    Persisted into `BootstrapRunState.taxonomy_edits` so an aborted-mid-reshape
+    run can be resumed by replaying the edits against a freshly-mined proposal
+    set on the next bootstrap (FR-018).
+    """
+
+    kind: StructureKind
+    category: str = Field(min_length=1)
+    into: list[str] | None = None
+    merge_with: str | None = None
+    new_name: str | None = None
+    new_pick: str | None = None
+    new_category_type: CategoryType | None = None
+    applied_at: datetime = Field(default_factory=_utc_now)
+
+    @model_validator(mode="after")
+    def _check_payload(self) -> StructureChange:
+        if self.kind == "merge" and not self.merge_with:
+            raise ValueError("StructureChange(kind='merge') requires merge_with")
+        if self.kind == "rename" and not self.new_name:
+            raise ValueError("StructureChange(kind='rename') requires new_name")
+        if self.kind == "add" and (not self.new_pick or self.new_category_type is None):
+            raise ValueError("StructureChange(kind='add') requires new_pick and new_category_type")
         return self
 
 
@@ -178,6 +236,7 @@ class BootstrapRunState(_Strict):
     deferred_categories: list[str] = Field(default_factory=list)
     skipped_sources: list[SkippedSource] = Field(default_factory=list)
     on_existing_choice: Literal["merge", "replace", "skip"] | None = None
+    taxonomy_edits: list[StructureChange] = Field(default_factory=list)
 
 
 # --------------------------------------------------------------------------- CLI error envelope
@@ -208,5 +267,7 @@ __all__ = [
     "SkippedSource",
     "SlotDecision",
     "SlotState",
+    "StructureChange",
+    "StructureKind",
     "ToolSignal",
 ]

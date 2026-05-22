@@ -24,17 +24,26 @@ from bis.bootstrap import (
     mine_profile,
     proposals_for_walkthrough,
     record_deferral,
+    record_structure_change,
     start_run_state,
 )
+from bis.categories import suggest_split
 from bis.config import load_settings
 from bis.models import (
     CategoryProposal,
+    CategoryType,
     CliError,
     DecisionAction,
     ErrorCode,
+    EvidenceBlock,
+    HistoryEntry,
     ProfileSnapshot,
     SlotDecision,
+    SlotState,
+    StructureChange,
+    StructureKind,
 )
+from bis.slots import read_bootstrap_run_state, write_slot_state
 
 app = typer.Typer(
     name="bis",
@@ -260,25 +269,74 @@ def bootstrap_pending_dives(
         typer.echo(f"{entry['category']} → {entry['pick']} (no deep-dive yet)")
 
 
+_VALID_ACTIONS = {"accept", "change", "skip", "defer", "split", "merge", "rename", "drop", "add"}
+_PICK_ACTIONS = {"accept", "change", "skip", "defer"}
+_STRUCTURE_ACTIONS = {"split", "merge", "rename", "drop", "add"}
+
+
 @bootstrap_app.command("confirm")
 def bootstrap_confirm(
     category: Annotated[str, typer.Option("--category", help="Slot category.")],
-    action: Annotated[str, typer.Option("--action", help="accept | change | skip | defer.")],
+    action: Annotated[
+        str,
+        typer.Option(
+            "--action",
+            help="accept | change | skip | defer | split | merge | rename | drop | add.",
+        ),
+    ],
     pick: Annotated[
         str | None,
-        typer.Option("--pick", help="The chosen package name (required for accept/change)."),
+        typer.Option("--pick", help="The chosen package name (required for accept/change/add)."),
     ] = None,
     json_mode: Annotated[bool, typer.Option("--json", help="Emit JSON-only output.")] = True,
     on_existing: Annotated[str, typer.Option("--on-existing", help="merge | replace.")] = "merge",
+    into: Annotated[
+        str | None,
+        typer.Option(
+            "--into",
+            help="Split: comma-separated sub-category names. Omit to use suggest_split.",
+        ),
+    ] = None,
+    merge_with: Annotated[
+        str | None,
+        typer.Option("--with", help="Merge target — the category absorbing this one."),
+    ] = None,
+    to_name: Annotated[
+        str | None,
+        typer.Option("--to-name", help="Rename: the new category label."),
+    ] = None,
+    new_type: Annotated[
+        str | None,
+        typer.Option(
+            "--new-type",
+            help="Add: category_type for the new slot (language | framework | tooling).",
+        ),
+    ] = None,
 ) -> None:
-    """Apply a single user decision (used by the bootstrap skill / scripts)."""
+    """Apply a single user decision (used by the bootstrap skill / scripts).
 
-    if action not in ("accept", "change", "skip", "defer"):
+    Supports both pick-level actions (accept/change/skip/defer) and US4
+    structural actions (split/merge/rename/drop/add).
+    """
+
+    if action not in _VALID_ACTIONS:
         _emit_error("scanner_failed", f"invalid action {action!r}")
-    action_typed: DecisionAction = cast(DecisionAction, action)
 
+    if action in _STRUCTURE_ACTIONS:
+        _handle_structure_action(
+            category=category,
+            action=action,
+            pick=pick,
+            into=into,
+            merge_with=merge_with,
+            to_name=to_name,
+            new_type=new_type,
+            json_mode=json_mode,
+        )
+        return
+
+    action_typed: DecisionAction = cast(DecisionAction, action)
     settings = load_settings()
-    # We need the matching proposal to record category_type + evidence; re-mine if needed.
     profile = mine_profile(settings)
     proposals = proposals_for_walkthrough(profile)
     proposal = next((p for p in proposals if p.category == category), None)
@@ -303,8 +361,236 @@ def bootstrap_confirm(
                 "mode": "confirm",
                 "decision": decision.model_dump(mode="json"),
                 "slot_yaml_written": str(written) if written else None,
+                "structure_change": None,
             }
         )
+
+
+def _handle_structure_action(
+    *,
+    category: str,
+    action: str,
+    pick: str | None,
+    into: str | None,
+    merge_with: str | None,
+    to_name: str | None,
+    new_type: str | None,
+    json_mode: bool,
+) -> None:
+    """Apply a US4 structural action and emit the confirm payload."""
+
+    kind = cast(StructureKind, action)
+    into_list = [s.strip() for s in into.split(",")] if into else None
+
+    # Per-action aux requirements (validators in models.py also enforce, but
+    # we'd rather error early with a clear hint than emit a Pydantic stack).
+    if action == "merge" and not merge_with:
+        _emit_error(
+            "scanner_failed", "merge requires --with <category>", hint="--with python-config"
+        )
+    if action == "rename" and not to_name:
+        _emit_error("scanner_failed", "rename requires --to-name <new>", hint="--to-name datastore")
+    if action == "add":
+        if not pick or not new_type:
+            _emit_error(
+                "scanner_failed",
+                "add requires --pick and --new-type",
+                hint="--pick terraform --new-type tooling",
+            )
+        if new_type not in ("language", "framework", "tooling"):
+            _emit_error("scanner_failed", f"invalid --new-type {new_type!r}")
+
+    # Ensure a run state exists so append_taxonomy_edit has a target.
+    run = read_bootstrap_run_state() or start_run_state()
+
+    # For non-add actions, validate the target proposal exists.
+    settings = load_settings()
+    proposal = None
+    if action != "add":
+        profile = mine_profile(settings)
+        proposals = proposals_for_walkthrough(profile)
+        proposal = next((p for p in proposals if p.category == category), None)
+        if proposal is None:
+            _emit_error(
+                "unknown_category",
+                f"no proposal found for category={category!r}",
+                hint="run `bis bootstrap --json --batch` to see available categories",
+            )
+
+    # Build the StructureChange.
+    new_category_type = cast(CategoryType, new_type) if new_type else None
+    try:
+        change = StructureChange(
+            kind=kind,
+            category=category,
+            into=into_list,
+            merge_with=merge_with,
+            new_name=to_name,
+            new_pick=pick if action == "add" else None,
+            new_category_type=new_category_type,
+        )
+    except Exception as exc:  # pydantic ValidationError
+        _emit_error("scanner_failed", f"invalid structure change: {exc}")
+
+    # Type narrowing for the rest of the function.
+    assert proposal is not None or action == "add"
+
+    # Apply guards specific to split / merge before persisting.
+    if action == "split" and proposal is not None and into_list is None:
+        suggestion = suggest_split(proposal)
+        if suggestion is None:
+            _emit_error(
+                "split_not_supported",
+                f"no heuristic split available for category={category!r}",
+                hint="pass --into name1,name2,... to supply your own partition",
+            )
+    if action == "merge" and merge_with is not None:
+        settings_for_types = load_settings()
+        profile_for_types = mine_profile(settings_for_types)
+        proposals_for_types = proposals_for_walkthrough(profile_for_types)
+        target = next((p for p in proposals_for_types if p.category == merge_with), None)
+        if target is None:
+            _emit_error(
+                "unknown_category",
+                f"merge target category={merge_with!r} not found",
+                hint="pick a category from `bis bootstrap --json --batch`",
+            )
+        if proposal is not None and proposal.category_type != target.category_type:
+            _emit_error(
+                "merge_incompatible_types",
+                (
+                    f"cannot merge {category!r} ({proposal.category_type}) with "
+                    f"{merge_with!r} ({target.category_type})"
+                ),
+                hint="rename one of them first, or pick a compatible target",
+            )
+
+    # Persist the structure change.
+    record_structure_change(run, change)
+
+    # For "add", also write the slot YAML directly so the new slot is durable
+    # without a follow-up accept action.
+    slot_yaml_written: str | None = None
+    if action == "add":
+        assert change.new_pick is not None and change.new_category_type is not None
+        state = SlotState(
+            category=category,
+            category_type=change.new_category_type,
+            pick=change.new_pick,
+            alternatives=[],
+            evidence=EvidenceBlock(
+                repo_count=0,
+                most_recent=change.applied_at,
+                evidence_strength=0.0,
+                contributing_repos=[],
+            ),
+            decided_at=change.applied_at,
+            history=[
+                HistoryEntry(
+                    action="bootstrap-add",
+                    from_pick=None,
+                    to_pick=change.new_pick,
+                    reason="bootstrap: user added custom slot",
+                    date=change.applied_at,
+                )
+            ],
+        )
+        slot_yaml_written = str(write_slot_state(state))
+
+    decision = SlotDecision(
+        category=category,
+        action=cast(DecisionAction, action),
+        chosen_pick=change.new_pick if action == "add" else None,
+        into=into_list,
+        merge_with=merge_with,
+        new_name=to_name,
+        new_category_type=new_category_type,
+        was_proposal_unchanged=False,
+    )
+
+    if json_mode:
+        _emit_json(
+            {
+                "mode": "confirm",
+                "decision": decision.model_dump(mode="json"),
+                "slot_yaml_written": slot_yaml_written,
+                "structure_change": change.model_dump(mode="json", exclude_none=True),
+            }
+        )
+
+
+# --------------------------------------------------------------------------- taxonomy-review subcommand
+
+
+@bootstrap_app.command("taxonomy-review")
+def bootstrap_taxonomy_review(
+    json_mode: Annotated[bool, typer.Option("--json", help="Emit JSON output.")] = True,
+) -> None:
+    """Pre-walk overview of proposals with per-proposal split suggestions.
+
+    Used by the bootstrap skill as the "looks good / reshape" entry point
+    (FR-017).
+    """
+
+    settings = load_settings()
+    profile = mine_profile(settings)
+    proposals = proposals_for_walkthrough(profile)
+
+    # Ensure a run state exists so any follow-up confirm has somewhere to
+    # append taxonomy_edits.
+    run = read_bootstrap_run_state() or start_run_state()
+
+    overview: list[dict] = []
+    for p in proposals:
+        suggestion = suggest_split(p)
+        overview.append(
+            {
+                "category": p.category,
+                "category_type": p.category_type,
+                "proposed_pick": p.proposed_pick,
+                "members": [p.proposed_pick, *p.alternatives],
+                "suggest_split_into": (
+                    sorted(s.category for s in suggestion) if suggestion else None
+                ),
+            }
+        )
+
+    if json_mode:
+        _emit_json(
+            {
+                "mode": "taxonomy-review",
+                "run_id": run.run_id,
+                "proposals": overview,
+            }
+        )
+
+
+# --------------------------------------------------------------------------- restructure subcommand
+
+
+@bootstrap_app.command("restructure")
+def bootstrap_restructure(
+    json_mode: Annotated[bool, typer.Option("--json", help="Emit JSON output.")] = True,
+) -> None:
+    """Enter taxonomy-edit mode against the cached proposal set (no re-mining).
+
+    Reads the current `slots/.bootstrap.yaml` and re-emits the taxonomy-review
+    overview computed from the freshly-mined profile (mining is still cheap
+    when the per-repo cache is warm, FR-015). Errors with `no_prior_proposal`
+    when no run state exists.
+    """
+
+    state = read_bootstrap_run_state()
+    if state is None:
+        _emit_error(
+            "no_prior_proposal",
+            "no prior bootstrap run found",
+            hint="run `bis bootstrap` first to mine a proposal set",
+        )
+
+    # Re-emit the taxonomy review; the user can chain `confirm --action ...`
+    # against the result.
+    bootstrap_taxonomy_review(json_mode=json_mode)
 
 
 # --------------------------------------------------------------------------- placeholder subcommands referenced by quickstart

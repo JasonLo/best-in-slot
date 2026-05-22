@@ -264,11 +264,141 @@ def order_for_walkthrough(
     return deferred_ordered + first_time
 
 
+# --------------------------------------------------------------------------- US4 structural helpers
+#
+# Deterministic, non-LLM helpers per FR-020. All inputs are in-memory proposal
+# objects; the only external lookup is CATEGORY_TABLE. No SafePayload, no
+# infer_categories_via_llm — adding either to a structure helper would breach
+# the privacy invariant in FR-013.
+
+
+def suggest_split(proposal: CategoryProposal) -> list[CategoryProposal] | None:
+    """Partition a proposal into sub-proposals using CATEGORY_TABLE.
+
+    Returns the sub-proposals when the proposal's members (`proposed_pick`
+    plus `alternatives`) map to ≥ 2 distinct sub-categories via the heuristic
+    table. Returns None when fewer than 2 distinct sub-categories are found —
+    the caller should surface this as `split_not_supported`.
+
+    Each sub-proposal carries evidence partitioned by member:
+    - `evidence_repo_count` is divided proportionally (at least 1 per sub).
+    - `evidence_most_recent` is the parent proposal's date (no per-member
+       timestamps available at this layer).
+    - `evidence_strength` is the parent's strength divided by the number of
+       sub-categories — a rough partition, refined when a fresh mining pass
+       rebuilds the proposal from real signals.
+    """
+
+    members = [proposal.proposed_pick, *proposal.alternatives]
+    by_sub: dict[str, list[str]] = defaultdict(list)
+    sub_types: dict[str, CategoryType] = {}
+    for pkg in members:
+        match = lookup_category(pkg)
+        if match is None:
+            continue
+        sub_name, sub_type = match
+        # Skip members that point back to this same category (no progress).
+        if sub_name == proposal.category:
+            continue
+        by_sub[sub_name].append(pkg)
+        sub_types[sub_name] = sub_type
+
+    if len(by_sub) < 2:
+        return None
+
+    n = len(by_sub)
+    base_count = max(1, proposal.evidence_repo_count // n)
+    base_strength = proposal.evidence_strength / n
+    out: list[CategoryProposal] = []
+    for sub_name, pkgs in by_sub.items():
+        pick = pkgs[0]
+        alts = pkgs[1:]
+        out.append(
+            CategoryProposal(
+                category=sub_name,
+                category_type=sub_types[sub_name],
+                proposed_pick=pick,
+                alternatives=alts,
+                evidence_repo_count=base_count,
+                evidence_most_recent=proposal.evidence_most_recent,
+                evidence_strength=base_strength,
+                confidence_qualifier=proposal.confidence_qualifier,
+            )
+        )
+    # Stable order: by sub-category name for determinism.
+    out.sort(key=lambda p: p.category)
+    return out
+
+
+def merge_proposals(*proposals: CategoryProposal) -> CategoryProposal:
+    """Union two or more proposals into one.
+
+    Invariants (FR-019):
+    - All inputs must share the same `category_type`; mismatch → ValueError
+      (caller maps to `merge_incompatible_types`).
+    - The first proposal's `category` survives as the merged category name.
+    - `proposed_pick` = first proposal's pick; the rest become alternatives.
+    - `alternatives` = ordered dedup union across all inputs (proposed_picks
+       of the non-first proposals appear first, then their alternatives).
+    - `evidence_repo_count` is bounded: max(individual counts) ≤ merged ≤
+       sum(counts). We use the sum here as the conservative upper bound; the
+       caller relies on a fresh mining pass for the exact set-based count.
+    - `evidence_most_recent` = max across inputs.
+    - `evidence_strength` = max across inputs (strongest wins).
+    """
+
+    if not proposals:
+        raise ValueError("merge_proposals requires at least one proposal")
+    if len({p.category_type for p in proposals}) > 1:
+        raise ValueError(
+            "merge_proposals: incompatible category_types — "
+            + ", ".join(f"{p.category}={p.category_type}" for p in proposals)
+        )
+    if len(proposals) == 1:
+        return proposals[0].model_copy()
+
+    first, rest = proposals[0], proposals[1:]
+    alts: list[str] = list(first.alternatives)
+    seen = {first.proposed_pick, *first.alternatives}
+    for p in rest:
+        for pkg in [p.proposed_pick, *p.alternatives]:
+            if pkg not in seen:
+                alts.append(pkg)
+                seen.add(pkg)
+
+    return CategoryProposal(
+        category=first.category,
+        category_type=first.category_type,
+        proposed_pick=first.proposed_pick,
+        alternatives=alts,
+        evidence_repo_count=sum(p.evidence_repo_count for p in proposals),
+        evidence_most_recent=max(p.evidence_most_recent for p in proposals),
+        evidence_strength=max(p.evidence_strength for p in proposals),
+        confidence_qualifier=first.confidence_qualifier,
+    )
+
+
+def apply_rename(proposal: CategoryProposal, new_name: str) -> CategoryProposal:
+    """Return a copy of the proposal with `category = new_name`; evidence preserved."""
+
+    return proposal.model_copy(update={"category": new_name})
+
+
+def apply_drop(proposals: list[CategoryProposal], category: str) -> list[CategoryProposal]:
+    """Return a new list without the proposal matching `category`."""
+
+    return [p for p in proposals if p.category != category]
+
+
 __all__ = [
     "CATEGORY_TABLE",
+    "apply_drop",
+    "apply_rename",
     "build_proposals",
     "evidence_strength",
     "infer_categories_via_llm",
     "lookup_category",
+    "merge_proposals",
     "order_for_walkthrough",
+    "suggest_split",
 ]

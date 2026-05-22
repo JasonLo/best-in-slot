@@ -59,26 +59,108 @@
       "additionalProperties": false,
       "properties": {
         "category": { "type": "string", "minLength": 1 },
-        "action": { "enum": ["accept", "change", "skip", "defer"] },
+        "action": {
+          "enum": [
+            "accept",
+            "change",
+            "skip",
+            "defer",
+            "split",
+            "merge",
+            "rename",
+            "drop",
+            "add"
+          ]
+        },
         "chosen_pick": { "type": ["string", "null"] },
+        "into": {
+          "type": ["array", "null"],
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "merge_with": { "type": ["string", "null"] },
+        "new_name": { "type": ["string", "null"] },
+        "new_category_type": {
+          "enum": ["language", "framework", "tooling", null]
+        },
         "was_proposal_unchanged": { "type": "boolean" },
         "decided_at": { "type": "string", "format": "date-time" }
       },
       "allOf": [
         {
-          "if": { "properties": { "action": { "enum": ["accept", "change"] } } },
+          "if": { "properties": { "action": { "enum": ["accept", "change", "add"] } } },
           "then": {
             "properties": { "chosen_pick": { "type": "string", "minLength": 1 } },
             "required": ["chosen_pick"]
           }
         },
         {
-          "if": { "properties": { "action": { "enum": ["skip", "defer"] } } },
+          "if": { "properties": { "action": { "enum": ["skip", "defer", "split", "merge", "rename", "drop"] } } },
           "then": {
             "properties": { "chosen_pick": { "type": "null" } }
           }
+        },
+        {
+          "if": { "properties": { "action": { "const": "merge" } } },
+          "then": {
+            "properties": { "merge_with": { "type": "string", "minLength": 1 } },
+            "required": ["merge_with"]
+          }
+        },
+        {
+          "if": { "properties": { "action": { "const": "rename" } } },
+          "then": {
+            "properties": { "new_name": { "type": "string", "minLength": 1 } },
+            "required": ["new_name"]
+          }
+        },
+        {
+          "if": { "properties": { "action": { "const": "add" } } },
+          "then": {
+            "properties": {
+              "new_category_type": { "enum": ["language", "framework", "tooling"] }
+            },
+            "required": ["new_category_type"]
+          }
         }
       ]
+    },
+    "StructureChange": {
+      "type": "object",
+      "required": ["kind", "category", "applied_at"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["split", "merge", "rename", "drop", "add"] },
+        "category": { "type": "string", "minLength": 1 },
+        "into": {
+          "type": ["array", "null"],
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "merge_with": { "type": ["string", "null"] },
+        "new_name": { "type": ["string", "null"] },
+        "new_pick": { "type": ["string", "null"] },
+        "new_category_type": {
+          "enum": ["language", "framework", "tooling", null]
+        },
+        "applied_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "TaxonomyReviewProposal": {
+      "type": "object",
+      "required": ["category", "category_type", "proposed_pick", "members"],
+      "additionalProperties": false,
+      "properties": {
+        "category": { "type": "string", "minLength": 1 },
+        "category_type": { "enum": ["language", "framework", "tooling"] },
+        "proposed_pick": { "type": "string", "minLength": 1 },
+        "members": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "suggest_split_into": {
+          "type": ["array", "null"],
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
     }
   },
   "oneOf": [
@@ -111,19 +193,40 @@
     },
     {
       "title": "bis bootstrap confirm result",
-      "description": "Result of applying a single user decision to one proposed slot.",
+      "description": "Result of applying a single user decision to one proposed slot. For structure actions (split/merge/rename/drop/add), `structure_change` is populated; for pick actions (accept/change/skip/defer), `slot_yaml_written` is populated when a slot file was written.",
       "type": "object",
       "required": ["mode", "decision"],
       "additionalProperties": false,
       "properties": {
         "mode": { "const": "confirm" },
         "decision": { "$ref": "#/$defs/SlotDecision" },
-        "slot_yaml_written": { "type": ["string", "null"] }
+        "slot_yaml_written": { "type": ["string", "null"] },
+        "structure_change": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/StructureChange" }
+          ]
+        }
+      }
+    },
+    {
+      "title": "bis bootstrap taxonomy-review result",
+      "description": "Pre-walk overview of the full proposal set, with per-proposal split suggestions where the heuristic table can offer one. Emitted by `bis bootstrap taxonomy-review --json`.",
+      "type": "object",
+      "required": ["mode", "run_id", "proposals"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "const": "taxonomy-review" },
+        "run_id": { "type": "string", "minLength": 1 },
+        "proposals": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/TaxonomyReviewProposal" }
+        }
       }
     },
     {
       "title": "bis bootstrap error",
-      "description": "Returned when the CLI cannot proceed (e.g., existing slots present but --on-existing flag missing in batch mode).",
+      "description": "Returned when the CLI cannot proceed.",
       "type": "object",
       "required": ["mode", "error"],
       "additionalProperties": false,
@@ -139,7 +242,11 @@
                 "existing_state_unresolved",
                 "no_repos_in_window",
                 "gh_auth_missing",
-                "scanner_failed"
+                "scanner_failed",
+                "unknown_category",
+                "split_not_supported",
+                "merge_incompatible_types",
+                "no_prior_proposal"
               ]
             },
             "message": { "type": "string", "minLength": 1 },

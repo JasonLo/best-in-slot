@@ -140,7 +140,53 @@ Single-project Python CLI. Source under `bis/`, tests under `tests/`, skills und
 
 ---
 
-## Phase 6: Polish & Cross-Cutting Concerns
+## Phase 6: User Story 4 — Reshape the slot structure during bootstrap (Priority: P2)
+
+**Why this priority**: US1 fixed the taxonomy as whatever `categories.py` proposes and only let the user choose *within* a slot. Real-world bootstrap usage (commit `3bc2482`) showed the taxonomy itself is often the harder decision — `python-tooling` lumped uv / ruff / ty / pytest / ipykernel into one slot where ipykernel won by frequency, and the user had to hand-edit `bis/categories.py` mid-flight to split it into 5 sub-slots. US4 turns that hand-edit into a first-class conversational affordance: split, merge, rename, drop, add custom slot — presented at two scopes (pre-walk taxonomy review + per-slot inline) so the user reshapes the structure and picks within the (rebuilt) slots in one flow.
+
+**Independent Test**: From a fresh `slots/` dir, the user runs the bootstrap, splits one proposed slot into N sub-slots, merges two proposed slots, renames one slot, drops one slot, adds one custom slot, then walks the rebuilt taxonomy and picks within each — the resulting `slots/*.yaml` set reflects the rebuilt structure and `slots/.bootstrap.yaml` contains a replayable `taxonomy_edits` log.
+
+> **Spec/plan note**: spec.md only documents accept/change/skip/defer (FR-004). T051 backfills US4 + FR-016..FR-020 into spec.md so the contract tests have something to point at. If the user wants the formal Spec Kit flow, run `/speckit-clarify` first against the proposed FRs in T051 before implementing.
+
+### Foundation for User Story 4 (schema + spec extensions)
+
+- [x] T048 [US4] Extend `specs/001-bootstrap-discovery/contracts/walkthrough-events.schema.json` with three new event types — `taxonomy_review_presented` (full proposal-list overview with per-proposal split-suggestion), `structure_action_offered`, `structure_action_applied` — and extend `UserResponse.action` to include `split | merge | rename | drop | add`, each with its auxiliary fields (`into: string[]`, `merge_with: string`, `new_name: string`, `new_category: {name, pick}`)
+- [x] T049 [US4] Extend `specs/001-bootstrap-discovery/contracts/bootstrap.schema.json` confirm-branch action enum with `split | merge | rename | drop | add` plus the matching auxiliary fields; ensure existing accept/change/skip/defer outputs still validate (additive change, no removals)
+- [x] T050 [P] [US4] Update `specs/001-bootstrap-discovery/data-model.md`: add `StructureChange` entity (discriminated union on `kind: split|merge|rename|drop|add` with per-kind payload), extend `SlotDecision.action` literal, add `BootstrapRunState.taxonomy_edits: list[StructureChange]` (append-only)
+- [x] T051 [P] [US4] Append US4 to `specs/001-bootstrap-discovery/spec.md` (mirroring the US1–US3 structure) with FR-016 (structure actions per slot), FR-017 (pre-walk taxonomy review), FR-018 (`taxonomy_edits` audit + replay on resume), FR-019 (structure ops preserve evidence: merge unions, split partitions, rename is identity-on-evidence), FR-020 (split-suggestion is heuristic-driven, not LLM-driven — keeps FR-013 trust boundary intact); add SC-010 (user can reshape ≥1 slot conversationally without editing `categories.py`)
+
+### Tests for User Story 4 (write FIRST, ensure FAIL before T060+)
+
+- [x] T052 [P] [US4] Contract test: `taxonomy_review_presented` and `structure_action_*` events validate against the extended schema; existing event payloads still validate (additive-change regression) in `tests/contract/test_walkthrough_events_structure.py`
+- [x] T053 [P] [US4] Contract test: `bis bootstrap confirm --action {split|merge|rename|drop|add}` JSON outputs validate against the extended `bootstrap.schema.json` in `tests/contract/test_bootstrap_confirm_structure_output.py`
+- [x] T054 [P] [US4] Integration test: end-to-end reshape — fixture proposes `{python-tooling, python-web, databases, docs}`; user issues split(python-tooling → 5 sub-slots), merge(docs into python-web), rename(databases → datastore), drop(one auto-generated sub-slot), add(custom `infra` slot with `terraform`); resulting `slots/*.yaml` set matches expected names + pick assignments in `tests/integration/test_bootstrap_structure_reshape.py`
+- [x] T055 [P] [US4] Integration test: pre-walk `taxonomy_review` path — bootstrap emits the full proposal list, user selects "reshape", applies one split, exits review mode, walk-through then iterates the rebuilt taxonomy in FR-014 order in `tests/integration/test_bootstrap_taxonomy_review.py`
+- [x] T056 [P] [US4] Integration test: resume after structural edits — user applies split + drop then aborts; next bootstrap run reads `slots/.bootstrap.yaml`, replays `taxonomy_edits` against the fresh proposal set, and re-presents the rebuilt taxonomy without asking the user to redo the structure decisions in `tests/integration/test_bootstrap_structure_resume.py`
+- [x] T057 [P] [US4] Unit test: `suggest_split(proposal)` — given a `CategoryProposal` whose members map to ≥2 distinct entries in `CATEGORY_TABLE` (e.g., {uv, ruff, ty, pytest, ipykernel}), returns the partitioned sub-proposals with evidence split per-member; returns `None` when all members share one sub-category in `tests/unit/test_categories_split_suggest.py`
+- [x] T058 [P] [US4] Unit test: `merge_proposals(p1, p2, …)` evidence invariant — `repo_count` = sum over disjoint contributing-repo sets (use `set` of repo identities, not naive sum), `most_recent` = `max(…)`, `alternatives` = ordered dedup union, `category_type` must match across inputs (raises `ValueError` on mismatch — caught at CLI layer as `merge_incompatible_types`) in `tests/unit/test_categories_merge.py`
+- [x] T059 [P] [US4] Unit test: `apply_rename` and `apply_drop` are pure on `list[CategoryProposal]`, preserve evidence (rename) or remove without leaking into other proposals (drop), and round-trip identically through `replay_taxonomy_edits` in `tests/unit/test_categories_rename_drop.py`
+
+### Implementation for User Story 4
+
+- [x] T060 [P] [US4] Extend `bis/models.py`: add `StructureChange` (Pydantic v2 discriminated union on `kind`), extend `SlotDecision.action` Literal to include the five new variants with optional payload fields (`into`, `merge_with`, `new_name`, `new_category`), add `BootstrapRunState.taxonomy_edits: list[StructureChange] = []`. Validator: structure-change targets must resolve to known category names at apply time (deferred to T062, not at construction time — the run state may reference categories that no longer exist after replay, which is a structural error to surface clearly)
+- [x] T061 [P] [US4] Extend `bis/categories.py` with three pure helpers: `suggest_split(proposal: CategoryProposal) -> list[CategoryProposal] | None` (uses `CATEGORY_TABLE` reverse-lookup; returns None when no split possible), `merge_proposals(*proposals: CategoryProposal) -> CategoryProposal` (evidence union per T058), `apply_rename(proposal: CategoryProposal, new_name: str) -> CategoryProposal` (identity on evidence). All deterministic; no LLM calls — keeps FR-013 trust boundary intact (FR-020)
+- [x] T062 [US4] Extend `bis/bootstrap.py` (depends on T060, T061): add `apply_structure_change(change: StructureChange, proposals: list[CategoryProposal]) -> list[CategoryProposal]` (pure on the proposal list, dispatches on `kind`), and `replay_taxonomy_edits(proposals: list[CategoryProposal], edits: list[StructureChange]) -> list[CategoryProposal]` for resume. Update `walkthrough_iter` so that after any structure change the iterator re-applies FR-014 ordering against the rebuilt proposal set (do not re-sort during iteration — checkpoint at each structure-change boundary)
+- [x] T063 [US4] Extend `bis/slots.py` (depends on T060): `write_bootstrap_run_state` persists `taxonomy_edits` (append-only — never rewrite history), `read_bootstrap_run_state` returns them. Add `append_taxonomy_edit(change: StructureChange) -> None` mirroring the existing `append_history` shape so the invariant is enforced at the storage layer, not the caller
+- [x] T064 [US4] Extend `bis/cli.py` (depends on T062, T063): add `bis bootstrap taxonomy-review --json` (emits the full proposal-list overview event with `suggest_split` annotations per proposal); extend `bis bootstrap confirm` with `--action {split,merge,rename,drop,add}` and aux flags `--into <name1,name2,...>`, `--with <category>`, `--to-name <name>`, `--category <name> --pick <pkg>`. Output strictly matches the extended `bootstrap.schema.json` (T053 enforces)
+- [x] T065 [US4] Add `bis bootstrap restructure` Typer subcommand to `bis/cli.py` (depends on T064): enters the taxonomy-edit flow against the *last cached proposal set* (read from `slots/.bootstrap.yaml`), without re-mining. Errors with `no_prior_proposal` envelope when run on a fresh project
+- [x] T066 [US4] Update `skills/bis-bootstrap/SKILL.md` (depends on T064): (a) insert pre-walk taxonomy-review step that calls `uv run bis bootstrap taxonomy-review --json`, renders the full proposal list, asks `[looks good / reshape]`; (b) extend the per-slot prompt with a secondary tier of structural actions presented compactly (`structural: split | merge | rename | drop`) so the primary accept/change/skip/defer prompt stays one-line; (c) "add custom slot" affordance available at any pause; (d) render the structural changes summary (count of splits/merges/renames/drops/adds) in the final `RunSummary` block
+- [x] T067 [US4] Wire error envelope additions to `bis/cli.py` per `bootstrap.schema.json` (depends on T064): `unknown_category` (rename/merge/drop target doesn't exist in current proposal set), `split_not_supported` (`suggest_split` returned None and no user-supplied partition provided), `merge_incompatible_types` (e.g., refusing to merge a `language` proposal with a `tooling` proposal — catches the `ValueError` raised in T058), `no_prior_proposal` (T065 entry point with empty `.bootstrap.yaml`). Each emits `{mode: "error", error: {code, message, hint}}`
+
+### US4 docs
+
+- [x] T068 [P] [US4] Update `specs/001-bootstrap-discovery/quickstart.md` with a worked reshape example: bootstrap proposes `python-tooling`, user issues `split` conversationally, walks the 5 resulting sub-slots, ends with the rebuilt structure persisted. Mirror the existing quickstart's prose style.
+- [x] T069 [P] [US4] Update root `README.md` to mention slot-structure reshaping (split/merge/rename/drop/add) as a bootstrap capability — one-line addition under the existing "Getting started" block; link to the US4 section of the quickstart.
+
+**Checkpoint**: At this point US4 is independently testable — running `uv run bis bootstrap` against any fixture proposal set should let the user reshape the taxonomy conversationally and persist a `slots/*.yaml` set that matches the rebuilt structure, with `slots/.bootstrap.yaml` containing a replayable `taxonomy_edits` log.
+
+---
+
+## Phase 7: Polish & Cross-Cutting Concerns
 
 - [x] T041 [P] Update root `README.md` to add a brief "Getting started" section linking to `specs/001-bootstrap-discovery/quickstart.md`; add a `bis bootstrap` row to the slot index introduction
 - [x] T042 [P] Run `uv run ty check bis tests` and resolve any type errors (constitution: standalone type hints on all public functions)
@@ -161,13 +207,15 @@ Single-project Python CLI. Source under `bis/`, tests under `tests/`, skills und
 - **Phase 3 (US1)**: depends on Phase 2 — the MVP
 - **Phase 4 (US2)**: depends on Phase 3 — needs the bootstrap pipeline to add deep-dive plumbing to
 - **Phase 5 (US3)**: depends on Phase 3 — needs the CLI surface to wrap; **independent of Phase 4** (skill can offer `/deep-dive` whether or not the `pending-dives` subcommand exists)
-- **Phase 6 (Polish)**: depends on whichever stories are shipped
+- **Phase 6 (US4)**: depends on Phase 3 — extends the bootstrap pipeline + skill; **independent of Phase 4 and Phase 5** (structure actions are orthogonal to deep-dive and to the conversational surface — they apply to whichever entry point the user uses)
+- **Phase 7 (Polish)**: depends on whichever stories are shipped
 
 ### Critical-path ordering inside each phase
 
 - **Within Phase 3 (US1)**: T011–T024 (tests + fixtures) must FAIL before T025–T033 (implementations) land. Within implementation: T029 depends on T027; T030 depends on T007; T031 depends on T025–T030; T032 depends on T031; T033 depends on T032.
 - **Within Phase 4 (US2)**: T034–T035 (tests) before T036–T037 (impl). T037 depends on T031.
 - **Within Phase 5 (US3)**: T038 (test) before T039 (skill). T040 may be a no-op depending on the existing `.claude/skills/` symlink layout.
+- **Within Phase 6 (US4)**: T048–T051 (schema + spec extensions) first — these are the contract. Then T052–T059 (tests, all `[P]`) must FAIL before T060+ implementations land. Within implementation: T060/T061 are independent; T062 depends on T060+T061; T063 depends on T060; T064 depends on T062+T063; T065 depends on T064; T066 depends on T064; T067 depends on T064. T068/T069 (docs) come last but are `[P]` with each other.
 
 ### Parallel Opportunities
 
@@ -177,7 +225,10 @@ Single-project Python CLI. Source under `bis/`, tests under `tests/`, skills und
 - **Phase 3 — impl**: T025, T026, T027, T028 are all `[P]` (independent modules). T029 and T030 are serial after their deps. T031 → T032 → T033 are serial.
 - **Phase 4**: T034 and T035 in parallel.
 - **Phase 5**: T039 and T040 effectively serial (T040 is a verification step).
-- **Phase 6**: T041–T044, T047 all `[P]`.
+- **Phase 6 — schema/spec**: T050 and T051 in parallel after T048/T049.
+- **Phase 6 — tests**: T052–T059 all `[P]` (different files).
+- **Phase 6 — impl**: T060 and T061 in parallel; T062/T063 serial after; T064 → {T065, T066, T067} parallel; T068/T069 parallel last.
+- **Phase 7**: T041–T044, T047 all `[P]`.
 
 ### Parallel example — Phase 3 test wave
 
@@ -219,13 +270,14 @@ The MVP delivers genuine value: a user can go from zero slots to a confirmed slo
 
 - After MVP → Phase 4 (deep-dive offer) → ship as a minor version
 - After Phase 4 → Phase 5 (skill) → ship as another minor; the skill is the most visible improvement for Claude Code users
-- Phase 6 (polish) folds in alongside whichever stories ship
+- After Phase 5 → Phase 6 (US4 slot-structure UX) → ship as another minor; this is the biggest user-experience improvement after MVP — removes the only known hand-edit (`bis/categories.py` reshape) from the real-world flow
+- Phase 7 (polish) folds in alongside whichever stories ship
 
 ### Parallel team strategy
 
 - One developer can carry the whole stack through MVP in ~2–3 focused days
 - With two: split the Phase 3 implementation cluster (scanner+github+privacy+cache vs categories+slots+bootstrap+cli)
-- US2 and US3 can be picked up by different developers in parallel once US1 lands
+- US2, US3, and US4 can be picked up by different developers in parallel once US1 lands — all three extend the bootstrap pipeline along orthogonal axes (enrichment, surface, structure)
 
 ---
 
@@ -235,3 +287,5 @@ The MVP delivers genuine value: a user can go from zero slots to a confirmed slo
 - File paths are absolute relative to repo root. `[P]` markers are accurate as of generation; if a refactor introduces a cross-task file dependency, drop the `[P]`.
 - The deferred TODO from R-12 ("pixi configs still on 3.12.*") is intentionally out of scope here — it's slot content, not bootstrap-feature scope.
 - Privacy is the single biggest correctness risk: T022 is the canary. Reviewers should `grep -r 'to_safe_payload\|SafePayload' bis/` on any PR touching `categories.py` or any future LLM call site.
+- US4 (Phase 6) extends `bis/categories.py` with split/merge helpers — these MUST stay deterministic (FR-020). Reviewers: ensure `suggest_split` reads only `CATEGORY_TABLE`, never the LLM-fallback path. The privacy invariant from T022 holds because US4 does not introduce any new payload type — the existing `SafePayload` scrubber covers it.
+- US4 spec drift: spec.md currently documents only accept/change/skip/defer (FR-004). T051 backfills FR-016..FR-020 before any code lands so contract tests have a documented target. Consider running `/speckit-clarify` against those FRs before T052–T059 are written if there's any uncertainty about exact wording — clarifying after tests land creates churn.

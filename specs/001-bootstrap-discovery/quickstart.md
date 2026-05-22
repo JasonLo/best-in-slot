@@ -48,9 +48,66 @@ Same flow, but the walk-through happens in conversation. The skill calls `bis bo
 
 ## Aborting and resuming
 
-Press Ctrl-C at any prompt. Already-confirmed slots are persisted; undecided slots become `deferred` in `slots/.bootstrap.yaml`.
+Press Ctrl-C at any prompt. Already-confirmed slots are persisted; undecided slots become `deferred` in `slots/.bootstrap.yaml`. Structural edits (US4 — see below) are also persisted as `taxonomy_edits` and **replayed** against the freshly-mined proposal set on the next run.
 
 Re-run `uv run bis bootstrap` later — deferred slots appear at the **top** of the walk-through (R-9 / R-11), in the order they were deferred. Once decided, they leave the deferred list.
+
+---
+
+## Reshaping the slot structure (US4)
+
+Sometimes the proposed taxonomy itself is wrong — not the pick within a slot, but the slot's shape. Real example: the original heuristic table lumped `uv`, `ruff`, `ty`, `pytest`, `ipykernel` into one `python-tooling` slot where the winner was decided by frequency (commit `3bc2482`). Splitting into 5 sub-slots — one per role — is a one-conversation operation:
+
+### Pre-walk taxonomy review
+
+```bash
+uv run bis bootstrap taxonomy-review --json
+```
+
+Returns the full proposal list with `members` (proposed_pick + alternatives) and `suggest_split_into` per proposal. The skill renders this as a `[looks good / reshape]` prompt.
+
+### Five structural actions
+
+Each runs through `bis bootstrap confirm` with a structure-aware action:
+
+```bash
+# Split one slot into N sub-slots — system suggests a partition, OR pass --into
+uv run bis bootstrap confirm --category python-tooling --action split --json
+uv run bis bootstrap confirm --category my-mixed --action split --into a,b,c --json
+
+# Merge one slot into another (must share category_type — see FR-019)
+uv run bis bootstrap confirm --category type-checker --action merge --with linter-formatter --json
+
+# Rename a slot label without changing membership
+uv run bis bootstrap confirm --category databases --action rename --to-name datastore --json
+
+# Drop a slot from the proposal set entirely (distinct from skip)
+uv run bis bootstrap confirm --category python-terminal --action drop --json
+
+# Add a slot the bootstrap didn't propose
+uv run bis bootstrap confirm --category infra --action add --pick terraform --new-type tooling --json
+```
+
+Each successful structure action is recorded in `slots/.bootstrap.yaml`'s `taxonomy_edits` array (append-only). On the next bootstrap run, those edits are **replayed** against the freshly-mined proposal set — you don't have to redo the reshape after a fresh pull or 24h cache expiry.
+
+### Restructure without re-mining
+
+If you want to revisit only the taxonomy (no fresh mining), use the dedicated subcommand:
+
+```bash
+uv run bis bootstrap restructure --json
+```
+
+This re-emits the taxonomy review against the cached proposal set. Errors with `no_prior_proposal` if you've never run a bootstrap on this directory.
+
+### Error envelopes specific to US4
+
+| Code | Meaning | Fix |
+| --- | --- | --- |
+| `unknown_category` | Merge / rename / drop target doesn't exist in the current proposal set | Run `bis bootstrap --json --batch` to see available categories. |
+| `split_not_supported` | The heuristic table can't partition this slot's members, and no `--into` was given | Pass `--into name1,name2,...` to supply your own partition. |
+| `merge_incompatible_types` | The two slots have different `category_type` (e.g., framework vs tooling) — merge would conflate roles | Rename one first, or pick a target with the same type. |
+| `no_prior_proposal` | `bis bootstrap restructure` invoked but no `slots/.bootstrap.yaml` exists | Run `bis bootstrap` first to mine a proposal set. |
 
 ---
 
