@@ -5,12 +5,32 @@ alternatives: []
 evidence:
   repo_count: 41
   most_recent: '2026-05-22T13:14:56Z'
-  evidence_strength: 209.05323763415427
+  evidence_strength: 208.70631357605652
   contributing_repos: []
-decided_at: '2026-05-22T15:53:30.852420Z'
+decided_at: '2026-05-22T17:07:14.193901Z'
 history:
 - action: bootstrap-accept
   from_pick: null
   to_pick: pydantic
   reason: 'bootstrap: accepted proposed pick'
   date: '2026-05-22T15:53:30.852420Z'
+- action: bootstrap-replace
+  from_pick: pydantic
+  to_pick: pydantic
+  reason: bootstrap re-run with --on-existing=replace
+  date: '2026-05-22T16:55:31.856388Z'
+- action: bootstrap-accept
+  from_pick: pydantic
+  to_pick: pydantic
+  reason: 'bootstrap: accepted proposed pick'
+  date: '2026-05-22T16:55:31.856388Z'
+- action: bootstrap-replace
+  from_pick: pydantic
+  to_pick: pydantic
+  reason: bootstrap re-run with --on-existing=replace
+  date: '2026-05-22T17:07:14.193901Z'
+- action: bootstrap-accept
+  from_pick: pydantic
+  to_pick: pydantic
+  reason: 'bootstrap: accepted proposed pick'
+  date: '2026-05-22T17:07:14.193901Z'

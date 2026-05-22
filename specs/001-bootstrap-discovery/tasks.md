@@ -198,6 +198,50 @@ Single-project Python CLI. Source under `bis/`, tests under `tests/`, skills und
 
 ---
 
+## Phase 8: User Story 5 — Fast hand-off to local walk-through (Priority: P1)
+
+**Why this priority**: Per the 2026-05-22 user feedback ("current bis-bootstrap workflow is way too slow, user spend much time just waiting. If the llm can focus on gathering the historical repo information, then hand off to some cli or questionary type ux, it should speed thing up much faster"). The current bootstrap skill drives a per-slot conversational loop: every accept / change / skip / defer is a separate LLM turn (~5–15s latency × ~12 slots = 2–4 min of waiting that adds no judgment value — the user already knows their preferred pick). US5 redistributes the work along the FR-013 trust boundary: the LLM does the upfront mining + category-inference-on-unknowns (where its judgment is genuinely useful — R-3), then hands off to a local fast TTY walk-through driven by `questionary` (sub-second per-slot decisions), then re-engages once at the end for batched `/deep-dive` chaining. This collapses interactive latency without changing what crosses the trust boundary. P1 because it directly fixes a current-user pain point on the MVP path; without it, every bootstrap session is slow even with US1–US4 complete.
+
+**Independent Test**: Run `/bis-bootstrap` against a fixture proposal set; verify (a) the conversation produces ≤3 LLM turns (mine → handoff → final summary), (b) per-slot decisions happen in a local `questionary` UI driven by keypresses, (c) system-side per-decision latency p95 < 200ms (measured via the deterministic walk adapter), (d) the resulting `slots/*.yaml` set is byte-identical to the prior LLM-in-loop flow (modulo `decided_at` timestamps).
+
+> **Spec/contract drift note**: spec.md currently documents the per-slot conversational flow (FR-010 + the skill in US3). T070 backfills FR-021..FR-024 + SC-011..SC-012 so contract tests have a documented target before implementation lands. If the user wants the formal Spec Kit flow, run `/speckit-clarify` against the proposed FRs in T070 before T072+ tests are written.
+
+### Spec/contract backfill (write FIRST so impl has documented target)
+
+- [ ] T070 [US5] Append US5 to `specs/001-bootstrap-discovery/spec.md` (mirroring the US1–US4 structure) with FR-021 (mining-only CLI mode — `bis init mine --json` emits the proposal set + persists it into `slots/.bootstrap.yaml` for handoff, no walk-through), FR-022 (fast local interactive walk-through — `bis init walk` reads the cached proposals and drives a `questionary`-style TTY walk-through with sub-second per-slot system-side latency), FR-023 (the bootstrap skill MUST minimise LLM turns: ≤3 turns per session — mine, handoff, summary; per-slot conversational iteration is forbidden), FR-024 (handoff transport: skill `exec`s `bis init walk` in the user's terminal; resulting slot state is byte-identical to a CLI-only run modulo `decided_at`); add SC-011 (system-side per-slot decision latency p95 < 200ms in the local walk-through) and SC-012 (total LLM-active wall-clock in a bootstrap session < 30s for ≤15 slots, vs the current ≥2 min). Document the trust-boundary invariant: the handoff does not introduce any new payload type; `SafePayload` continues to govern every LLM call in `categories.py` (FR-013 unchanged)
+
+### Setup (extends Phase 1)
+
+- [ ] T071 [P] [US5] Add `questionary>=2.0` to `[project.dependencies]` in `pyproject.toml`; run `uv sync` to update `uv.lock`. One-line rationale comment: questionary wraps `prompt_toolkit` to give arrow-key-driven `select`/`checkbox`/`text`/`confirm` — exactly the per-slot affordances the walk-through needs, ≪50ms keypress→render
+
+### Tests for User Story 5 (write FIRST, ensure FAIL before T076+)
+
+- [ ] T072 [P] [US5] Integration test: `bis init mine --json` emits the same `proposals` payload shape as `bis init --json --batch` but is decoupled from the walk-through — it writes the proposal set into `slots/.bootstrap.yaml` (a new `pending_proposals` field) and exits without entering any interactive loop. In `tests/integration/test_bootstrap_mine_only.py`. Asserts: exit 0, `mode == "mine"`, `slots/.bootstrap.yaml` exists with `pending_proposals` populated, no `slots/{category}.yaml` files written
+- [ ] T073 [P] [US5] Integration test: `bis init walk` against a `slots/.bootstrap.yaml` pre-populated with a fixture proposal set drives the questionary walk-through through a deterministic `WalkAdapter` (T075); verifies (a) one `SlotDecision` emitted per proposal, (b) `slots/{category}.yaml` files written for accept/change actions, (c) `pending_proposals` cleared and `deferred_categories`/`taxonomy_edits` updated correctly, (d) final summary JSON matches the existing `RunSummary` shape. In `tests/integration/test_bootstrap_walk_subcommand.py`
+- [ ] T074 [P] [US5] Integration test: skill-handoff equivalence — drive the new SKILL.md flow (mine via CLI, then `exec bis init walk` with deterministic adapter) against the same fixture proposals as `tests/integration/test_skill_cli_equivalence.py` (T038); resulting `slots/*.yaml` must match the LLM-in-loop output byte-for-byte modulo `decided_at` and `run_id`. In `tests/integration/test_skill_handoff_equivalence.py`. The test fakes the skill side by piping CLI calls; full Claude-Code transcript replay is out of scope (covered by T074's CLI-equivalent invariant)
+- [ ] T075 [P] [US5] Unit test: `bis/walk.py:WalkAdapter` Protocol — tests inject a scripted answer stream (`["accept", "change:fastapi", "skip", "defer", ...]`), assert one `SlotDecision` is emitted per call, assert the adapter raises on unexpected proposals (no answers left, or extra answers). Assert system-side per-decision latency from `present_proposal` entry to return is < 50ms with the deterministic adapter (no real I/O). In `tests/unit/test_walk_questionary_adapter.py`
+
+### Implementation for User Story 5
+
+- [ ] T076 [P] [US5] Create `bis/walk.py` (depends on T060–T065 proposal models): (a) `WalkAdapter` Protocol with `select_action(proposal) -> Literal[...]`, `select_alternative_or_freeform(proposal) -> str`, `confirm_existing_action(category, choices) -> str` — the seam tests use to inject deterministic answers; (b) a `QuestionaryAdapter` concrete impl that uses `questionary.select`/`questionary.text`; (c) a `WalkController` that iterates a `list[CategoryProposal]`, calls the adapter, builds a `SlotDecision`, and yields it; (d) optional progress callback so the CLI's `bis init walk` can print a one-line status per decision without coupling the controller to stdout. Pure on its inputs; no I/O outside the adapter
+- [ ] T077 [US5] Add `bis init mine` Typer subcommand to `bis/cli.py` (depends on T076 only for the `pending_proposals` schema): runs `mine_profile` + `proposals_for_walkthrough` + `replay_taxonomy_edits` (existing paths) and persists the resulting proposal list into `slots/.bootstrap.yaml` under a new field `pending_proposals: list[CategoryProposal]`. Emits `{mode: "mine", run_id, proposals, skipped_sources, on_existing_choice, taxonomy_edits_replayed: int, pending_proposals_count: int}` to stdout. Does NOT write any `slots/{category}.yaml`. Reuses `start_run_state`/`end_run_state` plumbing
+- [ ] T078 [US5] Extend `bis/models.py:BootstrapRunState` to add `pending_proposals: list[CategoryProposal] = []` (depends on T077). Update `bis/slots.py:read_bootstrap_run_state`/`write_bootstrap_run_state` to round-trip the field. Append-only invariant does NOT apply to `pending_proposals` (it's overwritten on each `bis init mine` call, cleared on `bis init walk` completion). Update the data-model.md `BootstrapRunState` section to document the new field
+- [ ] T079 [US5] Add `bis init walk` Typer subcommand to `bis/cli.py` (depends on T076, T077, T078): reads `pending_proposals` from `slots/.bootstrap.yaml` (errors with new `no_pending_proposals` envelope when empty), instantiates `WalkController` + `QuestionaryAdapter`, iterates decisions, calls the existing `apply_decision` for each, clears `pending_proposals` on completion, prints a one-line per-decision summary, and emits a final `{mode: "walk", run_id, decisions_count: {accept, change, skip, defer}, slot_yamls_written: list[str]}`. Flags: `--on-existing={merge,replace}` (forwarded to `apply_decision`), `--from-stdin` (read proposals from stdin as JSON instead of `.bootstrap.yaml` — for the SKILL handoff and for tests)
+- [ ] T080 [US5] Refactor `bis.cli._interactive_walkthrough` to delegate to `bis/walk.py:WalkController` + `QuestionaryAdapter` instead of the current bare `typer.prompt` loop (depends on T076, T079). The default `bis init` (no flags) continues to run mining → walk-through inline — terminal users get the snappy UX without invoking the skill at all. Preserve the existing dry-run flag behaviour
+- [ ] T081 [US5] Update `.claude/skills/bis-bootstrap/SKILL.md` (depends on T077, T079): replace the per-slot conversational loop (current Step 2b) with a single "handoff" step. New flow: (Step 1) `gh auth status` + `uv` precheck; (Step 2a) `uv run bis init taxonomy-review --json` for optional pre-walk reshape, same as today; (Step 2b NEW) `uv run bis init mine --json` — emits proposal count + skipped sources, then surface to the user: "Mined N proposals. Hand off to the local walk-through now? (runs `bis init walk` in your terminal — arrow keys + Enter, one keypress per slot.) [y/n]". On `y`, `exec uv run bis init walk` and pause; on `n`, end gracefully (proposals remain in `.bootstrap.yaml` for later); (Step 3 NEW) after the user reports walk completion, read `slots/.bootstrap.yaml` for the summary and call `uv run bis init pending-dives --json` to enumerate confirmed slots, then offer **one** prompt: `Run /deep-dive on all N confirmed slots? [all/none/select]`. SKILL.md MUST NOT iterate proposals conversationally. Add explicit "What this skill MUST NOT do" bullets: don't drive per-slot picks; don't call `bis init confirm` per slot during the walk (the walk-through owns that path now)
+- [ ] T082 [US5] Add new `no_pending_proposals` and `walk_aborted` error envelopes to `bis/cli.py` + `specs/001-bootstrap-discovery/contracts/bootstrap.schema.json` (depends on T079): `no_pending_proposals` when `bis init walk` runs with no cached proposals (hint: "run `bis init mine` first"); `walk_aborted` when the user `Ctrl-C`s mid-walk (so `pending_proposals` is preserved for a later resume — `bis init walk` is itself idempotent and resumable since it reads from the persisted set)
+
+### US5 polish
+
+- [ ] T083 [P] [US5] Add a latency regression test in `tests/integration/test_bootstrap_walk_latency.py`: drives `WalkController` through the deterministic adapter against a 20-proposal fixture; measures wall-clock from `present_proposal` entry to `apply_decision` return per decision; asserts p95 < 200ms (SC-011) and total system-side wall-clock < 4s for the full walk. Skip the test with a clear xfail message on CI if `questionary` import-time alone is the bottleneck (deterministic adapter shouldn't touch questionary, but the import cost is real)
+- [ ] T084 [P] [US5] Update `specs/001-bootstrap-discovery/quickstart.md` with the new fast-path walk: `bis init mine` → `bis init walk` → `/deep-dive` batch. Mention SC-011/SC-012 explicitly as the user-visible delta vs the prior per-slot conversational loop. Keep the existing single-command `bis init` example as the "everything in one shot for terminal users" path
+- [ ] T085 [P] [US5] Update root `README.md` "Getting started" block: add one bullet line under the existing `bis init` row — "Fast walk-through: arrow keys + Enter to confirm each slot (powered by questionary)". One line; do not expand the README otherwise
+- [ ] T086 [P] [US5] Update `bis/cli.py` module docstring + `bis init --help` text to note the new two-step `mine`/`walk` flow as the recommended pattern for skill-driven sessions, with `bis init` (no subcommand) as the recommended one-shot pattern for direct terminal use
+
+**Checkpoint**: A bootstrap session driven from `/bis-bootstrap` completes with ≤3 LLM turns (mine → handoff → summary). Per-slot decisions happen in a local TTY with arrow-key keypresses, system-side latency p95 < 200ms. Resulting `slots/*.yaml` are identical to the prior LLM-in-loop flow. The user's "spend much time just waiting" complaint is resolved against measurable success criteria (SC-011, SC-012).
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -209,6 +253,7 @@ Single-project Python CLI. Source under `bis/`, tests under `tests/`, skills und
 - **Phase 5 (US3)**: depends on Phase 3 — needs the CLI surface to wrap; **independent of Phase 4** (skill can offer `/deep-dive` whether or not the `pending-dives` subcommand exists)
 - **Phase 6 (US4)**: depends on Phase 3 — extends the bootstrap pipeline + skill; **independent of Phase 4 and Phase 5** (structure actions are orthogonal to deep-dive and to the conversational surface — they apply to whichever entry point the user uses)
 - **Phase 7 (Polish)**: depends on whichever stories are shipped
+- **Phase 8 (US5)**: depends on Phase 3 (existing CLI surface + walk-through entry point) and Phase 5 (the skill it refactors). **Independent of Phase 6** (US4 structure actions are applied at the proposal level before `bis init mine` persists `pending_proposals`, so the handoff carries an already-reshaped taxonomy through unchanged). T070 (spec backfill) MUST land first; T072–T075 (tests) MUST FAIL before T076+ implementations
 
 ### Critical-path ordering inside each phase
 
@@ -216,6 +261,7 @@ Single-project Python CLI. Source under `bis/`, tests under `tests/`, skills und
 - **Within Phase 4 (US2)**: T034–T035 (tests) before T036–T037 (impl). T037 depends on T031.
 - **Within Phase 5 (US3)**: T038 (test) before T039 (skill). T040 may be a no-op depending on the existing `.claude/skills/` symlink layout.
 - **Within Phase 6 (US4)**: T048–T051 (schema + spec extensions) first — these are the contract. Then T052–T059 (tests, all `[P]`) must FAIL before T060+ implementations land. Within implementation: T060/T061 are independent; T062 depends on T060+T061; T063 depends on T060; T064 depends on T062+T063; T065 depends on T064; T066 depends on T064; T067 depends on T064. T068/T069 (docs) come last but are `[P]` with each other.
+- **Within Phase 8 (US5)**: T070 (spec backfill) first — defines FR-021..FR-024 + SC-011..SC-012 the rest hangs off of. T071 (questionary dep) parallel with T070. T072–T075 (tests, all `[P]`) must FAIL before T076+ land. Within implementation: T076 (walk.py) and T078 (model + slots extension for `pending_proposals`) are independent and parallel; T077 (`bis init mine`) depends on T078; T079 (`bis init walk`) depends on T076 + T077 + T078; T080 (refactor `_interactive_walkthrough`) depends on T076 + T079; T081 (SKILL.md rewrite) depends on T077 + T079; T082 (new error envelopes) depends on T079. T083 (latency regression test) depends on T076. T084/T085/T086 (docs) are `[P]` with each other and land last.
 
 ### Parallel Opportunities
 
@@ -229,6 +275,10 @@ Single-project Python CLI. Source under `bis/`, tests under `tests/`, skills und
 - **Phase 6 — tests**: T052–T059 all `[P]` (different files).
 - **Phase 6 — impl**: T060 and T061 in parallel; T062/T063 serial after; T064 → {T065, T066, T067} parallel; T068/T069 parallel last.
 - **Phase 7**: T041–T044, T047 all `[P]`.
+- **Phase 8 — setup**: T070 (spec) and T071 (dep) in parallel.
+- **Phase 8 — tests**: T072, T073, T074, T075 all `[P]` (different files).
+- **Phase 8 — impl**: T076 and T078 in parallel after tests fail; T077 after T078; T079 after T076+T077+T078; T080/T081/T082 in parallel after T079.
+- **Phase 8 — polish**: T083, T084, T085, T086 all `[P]`.
 
 ### Parallel example — Phase 3 test wave
 
@@ -253,6 +303,22 @@ Task: "Implement bis/privacy.py"
 Task: "Implement bis/cache.py"
 ```
 
+### Parallel example — Phase 8 test wave (US5)
+
+```bash
+# Author these in parallel (separate files):
+Task: "Integration test mine-only in tests/integration/test_bootstrap_mine_only.py"
+Task: "Integration test walk subcommand in tests/integration/test_bootstrap_walk_subcommand.py"
+Task: "Integration test skill-handoff equivalence in tests/integration/test_skill_handoff_equivalence.py"
+Task: "Unit test walk adapter in tests/unit/test_walk_questionary_adapter.py"
+```
+
+```bash
+# Then impl wave (T076 + T078 are independent; the rest serialise):
+Task: "Implement bis/walk.py (WalkAdapter + QuestionaryAdapter + WalkController)"
+Task: "Extend bis/models.py BootstrapRunState with pending_proposals"
+```
+
 ---
 
 ## Implementation Strategy
@@ -271,6 +337,7 @@ The MVP delivers genuine value: a user can go from zero slots to a confirmed slo
 - After MVP → Phase 4 (deep-dive offer) → ship as a minor version
 - After Phase 4 → Phase 5 (skill) → ship as another minor; the skill is the most visible improvement for Claude Code users
 - After Phase 5 → Phase 6 (US4 slot-structure UX) → ship as another minor; this is the biggest user-experience improvement after MVP — removes the only known hand-edit (`bis/categories.py` reshape) from the real-world flow
+- After Phase 6 → **Phase 8 (US5 fast hand-off)** → ship as another minor; this collapses the per-slot LLM-turn loop into a single local walk-through, removing the 2–4 min of latency the user spends "just waiting" per session. P1 priority because it materially affects the existing MVP UX — every shipped bootstrap session benefits immediately
 - Phase 7 (polish) folds in alongside whichever stories ship
 
 ### Parallel team strategy
@@ -289,3 +356,5 @@ The MVP delivers genuine value: a user can go from zero slots to a confirmed slo
 - Privacy is the single biggest correctness risk: T022 is the canary. Reviewers should `grep -r 'to_safe_payload\|SafePayload' bis/` on any PR touching `categories.py` or any future LLM call site.
 - US4 (Phase 6) extends `bis/categories.py` with split/merge helpers — these MUST stay deterministic (FR-020). Reviewers: ensure `suggest_split` reads only `CATEGORY_TABLE`, never the LLM-fallback path. The privacy invariant from T022 holds because US4 does not introduce any new payload type — the existing `SafePayload` scrubber covers it.
 - US4 spec drift: spec.md currently documents only accept/change/skip/defer (FR-004). T051 backfills FR-016..FR-020 before any code lands so contract tests have a documented target. Consider running `/speckit-clarify` against those FRs before T052–T059 are written if there's any uncertainty about exact wording — clarifying after tests land creates churn.
+- US5 spec drift: spec.md + the existing skill describe a per-slot conversational walk-through (FR-010 + Step 2b of `skills/bis-bootstrap/SKILL.md`). T070 backfills FR-021..FR-024 + SC-011..SC-012 before T076+ land. Same precedent as US4 — consider `/speckit-clarify` against the proposed FRs first if the wording (especially the SC-011 latency budget and SC-012 LLM-turn cap) needs sharpening.
+- US5 trust-boundary invariant: the hand-off does NOT introduce any new payload type. The LLM still calls `categories.infer_categories` with a `SafePayload` during `bis init mine`; nothing else crosses the boundary. The walk-through is fully local. Reviewers: re-run the `grep -r 'to_safe_payload\|SafePayload' bis/` invariant after T076–T082 land.

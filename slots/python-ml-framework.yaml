@@ -1,0 +1,16 @@
+category: python-ml-framework
+category_type: framework
+pick: torch
+alternatives: []
+evidence:
+  repo_count: 0
+  most_recent: '2026-05-22T17:08:04.424347Z'
+  evidence_strength: 0.0
+  contributing_repos: []
+decided_at: '2026-05-22T17:08:04.424347Z'
+history:
+- action: bootstrap-add
+  from_pick: null
+  to_pick: torch
+  reason: 'bootstrap: user added custom slot'
+  date: '2026-05-22T17:08:04.424347Z'

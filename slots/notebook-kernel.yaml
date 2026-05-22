@@ -6,12 +6,32 @@ alternatives:
 evidence:
   repo_count: 50
   most_recent: '2026-05-21T19:18:22Z'
-  evidence_strength: 249.90507499546834
+  evidence_strength: 249.4903946433137
   contributing_repos: []
-decided_at: '2026-05-22T15:53:30.852420Z'
+decided_at: '2026-05-22T17:09:02.226219Z'
 history:
 - action: bootstrap-accept
   from_pick: null
   to_pick: ipykernel
   reason: 'bootstrap: accepted proposed pick'
   date: '2026-05-22T15:53:30.852420Z'
+- action: bootstrap-replace
+  from_pick: ipykernel
+  to_pick: ipykernel
+  reason: bootstrap re-run with --on-existing=replace
+  date: '2026-05-22T16:55:43.511100Z'
+- action: bootstrap-accept
+  from_pick: ipykernel
+  to_pick: ipykernel
+  reason: 'bootstrap: accepted proposed pick'
+  date: '2026-05-22T16:55:43.511100Z'
+- action: bootstrap-replace
+  from_pick: ipykernel
+  to_pick: ipykernel
+  reason: bootstrap re-run with --on-existing=replace
+  date: '2026-05-22T17:09:02.226219Z'
+- action: bootstrap-accept
+  from_pick: ipykernel
+  to_pick: ipykernel
+  reason: 'bootstrap: accepted proposed pick'
+  date: '2026-05-22T17:09:02.226219Z'

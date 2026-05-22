@@ -8,12 +8,32 @@ alternatives:
 evidence:
   repo_count: 4
   most_recent: '2026-05-22T00:24:48Z'
-  evidence_strength: 16.273601565280664
+  evidence_strength: 16.246312234860312
   contributing_repos: []
-decided_at: '2026-05-22T15:53:30.852420Z'
+decided_at: '2026-05-22T17:10:13.584006Z'
 history:
 - action: bootstrap-accept
   from_pick: null
   to_pick: ruff
   reason: 'bootstrap: accepted proposed pick'
   date: '2026-05-22T15:53:30.852420Z'
+- action: bootstrap-replace
+  from_pick: ruff
+  to_pick: ruff
+  reason: bootstrap re-run with --on-existing=replace
+  date: '2026-05-22T16:56:07.694824Z'
+- action: bootstrap-accept
+  from_pick: ruff
+  to_pick: ruff
+  reason: 'bootstrap: accepted proposed pick'
+  date: '2026-05-22T16:56:07.694824Z'
+- action: bootstrap-replace
+  from_pick: ruff
+  to_pick: ruff
+  reason: bootstrap re-run with --on-existing=replace
+  date: '2026-05-22T17:10:13.584006Z'
+- action: bootstrap-accept
+  from_pick: ruff
+  to_pick: ruff
+  reason: 'bootstrap: accepted proposed pick'
+  date: '2026-05-22T17:10:13.584006Z'

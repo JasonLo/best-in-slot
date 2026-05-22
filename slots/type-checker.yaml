@@ -5,12 +5,32 @@ alternatives: []
 evidence:
   repo_count: 1
   most_recent: '2025-07-02T22:06:38Z'
-  evidence_strength: 0.3042693405911722
+  evidence_strength: 0.30424215045698244
   contributing_repos: []
-decided_at: '2026-05-22T15:53:30.852420Z'
+decided_at: '2026-05-22T17:10:26.437639Z'
 history:
 - action: bootstrap-change
   from_pick: null
   to_pick: ty
   reason: 'bootstrap: changed from proposed ''mypy'''
   date: '2026-05-22T15:53:30.852420Z'
+- action: bootstrap-replace
+  from_pick: ty
+  to_pick: mypy
+  reason: bootstrap re-run with --on-existing=replace
+  date: '2026-05-22T16:56:27.859642Z'
+- action: bootstrap-change
+  from_pick: ty
+  to_pick: mypy
+  reason: 'bootstrap: changed from proposed ''mypy'''
+  date: '2026-05-22T16:56:27.859642Z'
+- action: bootstrap-replace
+  from_pick: mypy
+  to_pick: ty
+  reason: bootstrap re-run with --on-existing=replace
+  date: '2026-05-22T17:10:26.437639Z'
+- action: bootstrap-change
+  from_pick: mypy
+  to_pick: ty
+  reason: 'bootstrap: changed from proposed ''mypy'''
+  date: '2026-05-22T17:10:26.437639Z'

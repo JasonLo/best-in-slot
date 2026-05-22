@@ -7,12 +7,32 @@ alternatives:
 evidence:
   repo_count: 47
   most_recent: '2026-05-22T14:43:31Z'
-  evidence_strength: 241.14553815330802
+  evidence_strength: 240.73191354587144
   contributing_repos: []
-decided_at: '2026-05-22T15:53:30.852420Z'
+decided_at: '2026-05-22T17:09:33.048527Z'
 history:
 - action: bootstrap-change
   from_pick: null
   to_pick: httpx
   reason: 'bootstrap: changed from proposed ''requests'''
   date: '2026-05-22T15:53:30.852420Z'
+- action: bootstrap-replace
+  from_pick: httpx
+  to_pick: requests
+  reason: bootstrap re-run with --on-existing=replace
+  date: '2026-05-22T16:55:49.631646Z'
+- action: bootstrap-change
+  from_pick: httpx
+  to_pick: requests
+  reason: 'bootstrap: changed from proposed ''requests'''
+  date: '2026-05-22T16:55:49.631646Z'
+- action: bootstrap-replace
+  from_pick: requests
+  to_pick: httpx
+  reason: bootstrap re-run with --on-existing=replace
+  date: '2026-05-22T17:09:33.048527Z'
+- action: bootstrap-change
+  from_pick: requests
+  to_pick: httpx
+  reason: 'bootstrap: changed from proposed ''requests'''
+  date: '2026-05-22T17:09:33.048527Z'

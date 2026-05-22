@@ -1,17 +1,37 @@
 category: python-config
 category_type: tooling
-pick: python-dotenv
+pick: pydantic-settings
 alternatives:
 - pydantic-settings
 evidence:
   repo_count: 68
   most_recent: '2026-05-22T13:14:56Z'
-  evidence_strength: 348.188826272701
+  evidence_strength: 347.59766711325256
   contributing_repos: []
-decided_at: '2026-05-22T15:53:30.852420Z'
+decided_at: '2026-05-22T17:08:55.776420Z'
 history:
 - action: bootstrap-accept
   from_pick: null
   to_pick: python-dotenv
   reason: 'bootstrap: accepted proposed pick'
   date: '2026-05-22T15:53:30.852420Z'
+- action: bootstrap-replace
+  from_pick: python-dotenv
+  to_pick: python-dotenv
+  reason: bootstrap re-run with --on-existing=replace
+  date: '2026-05-22T16:55:41.103979Z'
+- action: bootstrap-accept
+  from_pick: python-dotenv
+  to_pick: python-dotenv
+  reason: 'bootstrap: accepted proposed pick'
+  date: '2026-05-22T16:55:41.103979Z'
+- action: bootstrap-replace
+  from_pick: python-dotenv
+  to_pick: pydantic-settings
+  reason: bootstrap re-run with --on-existing=replace
+  date: '2026-05-22T17:08:55.776420Z'
+- action: bootstrap-change
+  from_pick: python-dotenv
+  to_pick: pydantic-settings
+  reason: 'bootstrap: changed from proposed ''python-dotenv'''
+  date: '2026-05-22T17:08:55.776420Z'

@@ -1,0 +1,16 @@
+category: databases-timeseries
+category_type: framework
+pick: influxdb-client
+alternatives: []
+evidence:
+  repo_count: 0
+  most_recent: '2026-05-22T17:08:49.068593Z'
+  evidence_strength: 0.0
+  contributing_repos: []
+decided_at: '2026-05-22T17:08:49.068593Z'
+history:
+- action: bootstrap-add
+  from_pick: null
+  to_pick: influxdb-client
+  reason: 'bootstrap: user added custom slot'
+  date: '2026-05-22T17:08:49.068593Z'

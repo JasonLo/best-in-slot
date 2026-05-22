@@ -1,0 +1,16 @@
+category: python-web-api
+category_type: framework
+pick: fastapi
+alternatives: []
+evidence:
+  repo_count: 0
+  most_recent: '2026-05-22T17:07:35.349921Z'
+  evidence_strength: 0.0
+  contributing_repos: []
+decided_at: '2026-05-22T17:07:35.349921Z'
+history:
+- action: bootstrap-add
+  from_pick: null
+  to_pick: fastapi
+  reason: 'bootstrap: user added custom slot'
+  date: '2026-05-22T17:07:35.349921Z'

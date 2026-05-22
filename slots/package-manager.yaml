@@ -6,12 +6,32 @@ alternatives:
 evidence:
   repo_count: 2
   most_recent: '2026-04-15T19:35:21Z'
-  evidence_strength: 2.012644325551302
+  evidence_strength: 2.0115388477548524
   contributing_repos: []
-decided_at: '2026-05-22T15:53:30.852420Z'
+decided_at: '2026-05-22T17:10:20.054382Z'
 history:
 - action: bootstrap-change
   from_pick: null
   to_pick: uv
   reason: 'bootstrap: changed from proposed ''pip'''
   date: '2026-05-22T15:53:30.852420Z'
+- action: bootstrap-replace
+  from_pick: uv
+  to_pick: pip
+  reason: bootstrap re-run with --on-existing=replace
+  date: '2026-05-22T16:56:24.199379Z'
+- action: bootstrap-change
+  from_pick: uv
+  to_pick: pip
+  reason: 'bootstrap: changed from proposed ''pip'''
+  date: '2026-05-22T16:56:24.199379Z'
+- action: bootstrap-replace
+  from_pick: pip
+  to_pick: uv
+  reason: bootstrap re-run with --on-existing=replace
+  date: '2026-05-22T17:10:20.054382Z'
+- action: bootstrap-change
+  from_pick: pip
+  to_pick: uv
+  reason: 'bootstrap: changed from proposed ''pip'''
+  date: '2026-05-22T17:10:20.054382Z'

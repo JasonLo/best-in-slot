@@ -1,6 +1,6 @@
 category: python-data
 category_type: framework
-pick: pandas
+pick: polars
 alternatives:
 - numpy
 - matplotlib
@@ -12,12 +12,32 @@ alternatives:
 evidence:
   repo_count: 59
   most_recent: '2026-05-22T14:43:31Z'
-  evidence_strength: 301.43974119961206
+  evidence_strength: 300.93923883672585
   contributing_repos: []
-decided_at: '2026-05-22T15:53:30.852420Z'
+decided_at: '2026-05-22T17:07:07.536105Z'
 history:
 - action: bootstrap-accept
   from_pick: null
   to_pick: pandas
   reason: 'bootstrap: accepted proposed pick'
   date: '2026-05-22T15:53:30.852420Z'
+- action: bootstrap-replace
+  from_pick: pandas
+  to_pick: pandas
+  reason: bootstrap re-run with --on-existing=replace
+  date: '2026-05-22T16:55:29.524296Z'
+- action: bootstrap-accept
+  from_pick: pandas
+  to_pick: pandas
+  reason: 'bootstrap: accepted proposed pick'
+  date: '2026-05-22T16:55:29.524296Z'
+- action: bootstrap-replace
+  from_pick: pandas
+  to_pick: polars
+  reason: bootstrap re-run with --on-existing=replace
+  date: '2026-05-22T17:07:07.536105Z'
+- action: bootstrap-change
+  from_pick: pandas
+  to_pick: polars
+  reason: 'bootstrap: changed from proposed ''pandas'''
+  date: '2026-05-22T17:07:07.536105Z'
