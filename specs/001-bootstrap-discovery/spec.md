@@ -17,6 +17,10 @@
 - Q: How does a deferred slot return to the user's attention? → A: Automatically resurfaces on the next bootstrap run; no timer or cooldown, just a flag.
 - Q: In what order are slot proposals presented during the walk-through? → A: Grouped by category type — languages first, then frameworks, then tooling — with evidence-strength (strongest first) as the tiebreaker within each group.
 - Q: If mining is interrupted (crash, abort) partway through, how is its work preserved? → A: Per-repo cache with a short TTL (~24h); retries within the window skip already-scanned repos, no first-class resumable-job state.
+- Q: Should `bis init walk` also present the US6 structure-confirmation step? → A: Yes — confirm step appears in both `bis init` and `bis init walk`; `bis init walk` accepts a `--skip-confirm` flag for the skill flow (which already called `taxonomy-review`).
+- Q: How does the US6 reshape sub-loop terminate? → A: Single inner loop — shows overview, accepts repeated `split/merge/rename/drop/add` actions, exits only on explicit `done` (then proceeds to walk).
+- Q: What is the SC-013 measurement denominator? → A: Conditional — measure across runs with ≥1 edit only. SC-013 = (edits at confirm phase) / (total edits across qualifying runs) ≥ 95%.
+- Q: Should the US6 confirm prompt be skipped when no reshape is plausible (e.g., single slot)? → A: No — always show overview + prompt unconditionally, but `looks good` is the default; pressing Enter accepts and proceeds. Reshape requires explicit typing.
 
 ## User Scenarios & Testing *(mandatory)*
 

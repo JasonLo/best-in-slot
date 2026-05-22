@@ -12,9 +12,9 @@ alternatives:
 evidence:
   repo_count: 59
   most_recent: '2026-05-22T14:43:31Z'
-  evidence_strength: 300.93923883672585
+  evidence_strength: 300.66039964655675
   contributing_repos: []
-decided_at: '2026-05-22T17:07:07.536105Z'
+decided_at: '2026-05-22T17:48:31.836062Z'
 history:
 - action: bootstrap-accept
   from_pick: null
@@ -41,3 +41,8 @@ history:
   to_pick: polars
   reason: 'bootstrap: changed from proposed ''pandas'''
   date: '2026-05-22T17:07:07.536105Z'
+- action: bootstrap-change
+  from_pick: polars
+  to_pick: polars
+  reason: 'bootstrap: changed from proposed ''pandas'''
+  date: '2026-05-22T17:48:31.836062Z'

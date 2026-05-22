@@ -1,0 +1,21 @@
+category: python-ai
+category_type: framework
+pick: openai
+alternatives:
+- torch
+- transformers
+- anthropic
+- fastmcp
+- tensorflow
+evidence:
+  repo_count: 36
+  most_recent: '2026-05-21T21:58:12Z'
+  evidence_strength: 179.1549029309268
+  contributing_repos: []
+decided_at: '2026-05-22T17:48:41.362240Z'
+history:
+- action: bootstrap-accept
+  from_pick: null
+  to_pick: openai
+  reason: 'bootstrap: accepted proposed pick'
+  date: '2026-05-22T17:48:41.362240Z'

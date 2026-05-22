@@ -5,9 +5,9 @@ alternatives: []
 evidence:
   repo_count: 41
   most_recent: '2026-05-22T13:14:56Z'
-  evidence_strength: 208.70631357605652
+  evidence_strength: 208.51384643117197
   contributing_repos: []
-decided_at: '2026-05-22T17:07:14.193901Z'
+decided_at: '2026-05-22T17:48:34.400134Z'
 history:
 - action: bootstrap-accept
   from_pick: null
@@ -34,3 +34,8 @@ history:
   to_pick: pydantic
   reason: 'bootstrap: accepted proposed pick'
   date: '2026-05-22T17:07:14.193901Z'
+- action: bootstrap-accept
+  from_pick: pydantic
+  to_pick: pydantic
+  reason: 'bootstrap: accepted proposed pick'
+  date: '2026-05-22T17:48:34.400134Z'

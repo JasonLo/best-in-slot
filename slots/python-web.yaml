@@ -1,0 +1,21 @@
+category: python-web
+category_type: framework
+pick: streamlit
+alternatives:
+- fastapi
+- flask
+- gradio
+- starlette
+- django
+evidence:
+  repo_count: 38
+  most_recent: '2026-05-22T14:43:31Z'
+  evidence_strength: 197.03948881020293
+  contributing_repos: []
+decided_at: '2026-05-22T17:48:35.893841Z'
+history:
+- action: bootstrap-accept
+  from_pick: null
+  to_pick: streamlit
+  reason: 'bootstrap: accepted proposed pick'
+  date: '2026-05-22T17:48:35.893841Z'

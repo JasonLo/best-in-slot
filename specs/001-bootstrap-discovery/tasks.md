@@ -242,6 +242,56 @@ Single-project Python CLI. Source under `bis/`, tests under `tests/`, skills und
 
 ---
 
+## Phase 9: User Story 6 — Confirm slot structure before per-slot picks (Priority: P1)
+
+**Why this priority**: Today `bis init` (default interactive flow) mines → proposes → drops straight into per-slot picks against whatever `categories.py` produced. US4 introduced structural primitives (split/merge/rename/drop/add) and a `taxonomy-review` subcommand, but FR-017 made it OPTIONAL ("the user MAY skip the review"). In practice the skill calls it explicitly, but terminal users of `bis init` never see it — they hit a possibly-wrong taxonomy slot-by-slot and either abort or live with it. US6 promotes the review to a mandatory step in the default flow: after mining and before any per-slot prompt, the user sees the proposed structure (categories, types, members, suggested splits) and either accepts it or reshapes it. P1 because it changes the default UX of the MVP entry point — every interactive bootstrap session is affected.
+
+**Independent Test**: Run `uv run bis init` (no flags) against a fixture proposal set. Verify (a) after mining, a structure-overview block prints listing each proposed category with type/members/suggest_split_into, (b) the user is prompted `[looks good / reshape]` BEFORE any per-slot prompt appears, (c) on `reshape`, the user can apply ≥1 structural edit and the walk-through then iterates the rebuilt proposal set in FR-014 order, (d) on `looks good`, no extra prompts are inserted and the walk-through proceeds against the original proposal set, (e) `--batch --json` mode emits a `proposed_structure_overview` field but performs no prompt.
+
+> **Spec/contract backfill note**: spec.md FR-017 currently documents the review as optional. T087 tightens it to mandatory-in-default-flow and adds FR-025/FR-026 + SC-013. If the user wants the formal Spec Kit flow, run `/speckit-clarify` against the proposed FRs in T087 before T088–T091 tests are written.
+
+### Spec/contract backfill (write FIRST so impl has documented target)
+
+- [ ] T087 [US6] Append US6 to `specs/001-bootstrap-discovery/spec.md` (mirroring the US1–US5 structure). Incorporates the 4 clarifications recorded in the 2026-05-22 session. Add FR-025 (both `bis init` default flow AND `bis init walk` MUST present a structure-confirmation step after mining/load and before any per-slot prompt; `bis init walk` accepts a `--skip-confirm` flag the skill flow uses when it already ran `taxonomy-review`; the overview is shown unconditionally — even for trivial proposal sets — but `looks good` is the default answer and pressing Enter accepts it; explicit typing required only to enter reshape), FR-026 (the structure-confirmation step MUST reuse the same split/merge/rename/drop/add primitives as US4 — no new structural action; on `reshape`, a single inner loop runs accepting repeated structural actions, exiting only on explicit `done`). Tighten FR-017 from "MAY skip" to "MAY skip in `--batch` mode or via `bis init walk --skip-confirm`; MUST surface in all other interactive entry points". Add SC-013 (across runs that applied ≥1 structural edit — runs with zero edits are excluded from the denominator — ≥95% of `taxonomy_edits` entries carry `applied_at_phase == "confirm"`). Document that batch/JSON mode is unchanged behavior-wise but gains a `proposed_structure_overview` field in the output payload.
+
+- [ ] T088 [US6] Extend `specs/001-bootstrap-discovery/contracts/bootstrap.schema.json`: add optional `proposed_structure_overview: list[{category, category_type, members, evidence_strength, suggest_split_into}]` to the `batch` mode output object. Existing batch outputs without the field MUST still validate (additive change, no removals).
+
+### Tests for User Story 6 (write FIRST, ensure FAIL before T092+)
+
+- [ ] T089 [P] [US6] Integration test: `bis init` (interactive, no flags) — after mining and proposing, the CLI prints a structure overview (one block per proposal: category, type, members, evidence-strength, suggest_split_into), then prompts `[looks good / reshape]` with `looks good` as the default; on Enter (default-accept), the walk-through proceeds and exactly one prompt-line is consumed before the first per-slot prompt; on `reshape`, no per-slot prompt appears until the user issues `done`. Also asserts the overview shows even for trivial proposal sets (1 proposal fixture). Use a fixture proposal set + a scripted typer.testing CliRunner; in `tests/integration/test_bootstrap_structure_confirm_default.py`
+
+- [ ] T090 [P] [US6] Integration test: `bis init` reshape path — user enters reshape, applies TWO edits in the same inner loop (e.g., one `split` + one `rename`) before issuing `done`; assert (a) both `taxonomy_edits` entries carry `applied_at_phase == "confirm"`, (b) only one trip through the `[looks good / reshape]` outer prompt was needed (clarification: single inner loop), (c) the walk-through iterates the rebuilt proposal set in FR-014 order, (d) sub-proposals produced by the split each carry their own evidence per FR-019; in `tests/integration/test_bootstrap_structure_confirm_reshape.py`. Also adds a sibling test exercising `bis init walk --skip-confirm` that asserts NO confirm prompt fires (skill-flow parity)
+
+- [ ] T091 [P] [US6] Integration test: `bis init --batch --json` emits `proposed_structure_overview` alongside the existing `proposals` field; the batch run performs NO interactive prompt (CliRunner exits cleanly without consuming an input stream); existing batch-output assertions in `tests/integration/test_bootstrap_end_to_end.py` continue to pass (regression check). In `tests/integration/test_bootstrap_batch_structure_overview.py`
+
+- [ ] T092 [P] [US6] Unit test: `build_structure_overview(proposals: list[CategoryProposal]) -> list[StructureOverviewEntry]` returns one entry per proposal with `category, category_type, members, evidence_strength, suggest_split_into`; ordering matches FR-014 (languages → frameworks → tooling, evidence-strength descending within group); `suggest_split_into` is None when `suggest_split` returns None; in `tests/unit/test_bootstrap_structure_overview.py`
+
+### Implementation for User Story 6
+
+- [ ] T093 [P] [US6] Add `StructureOverviewEntry` Pydantic v2 model to `bis/models.py`: fields `category: str`, `category_type: Literal["language","framework","tooling"]`, `members: list[str]`, `evidence_strength: float`, `suggest_split_into: list[str] | None`. Pure data model — no validators beyond Pydantic defaults
+
+- [ ] T094 [P] [US6] Extend `bis/models.py:StructureChange` (or the existing `taxonomy_edits` schema) with `applied_at_phase: Literal["confirm", "walk", "post_walk"]` (default `"walk"` for back-compat with existing US4 callers). Update `bis/slots.py:append_taxonomy_edit` signature to require the phase argument. Existing call sites in US4 paths pass `"walk"`
+
+- [ ] T095 [US6] Implement `build_structure_overview(proposals: list[CategoryProposal]) -> list[StructureOverviewEntry]` in `bis/bootstrap.py` (depends on T093). Pure on its inputs; reuses `categories.suggest_split` for the optional suggestion field. Re-applies FR-014 ordering before returning
+
+- [ ] T096 [US6] Implement `_interactive_confirm_structure(proposals: list[CategoryProposal], run: BootstrapRunState) -> list[CategoryProposal]` in `bis/cli.py` (depends on T094, T095). Behavior per the 2026-05-22 clarifications: (a) prints the overview using `build_structure_overview`, one line per entry with the suggest-split hint when present — shown unconditionally even for trivial proposal sets; (b) prompts `[looks good / reshape]` via `typer.prompt` with **default = `looks good`** so pressing Enter accepts; (c) on `looks good`, returns `proposals` unchanged; (d) on `reshape`, enters a **single inner loop** offering `split / merge / rename / drop / add / done`, calls `apply_structure_change` on each edit, appends to `run.taxonomy_edits` with `applied_at_phase="confirm"`, re-displays the overview after each edit; exits only on explicit `done`. Returns the (possibly reshaped) proposal list
+
+- [ ] T097 [US6] Wire `_interactive_confirm_structure` into `init_root` AND `init_walk` in `bis/cli.py` (depends on T096) — per the 2026-05-22 clarification, BOTH default `bis init` and `bis init walk` get the confirm step. For `init_root`: inject between the existing `proposals = proposals_for_walkthrough(...)` line and the `_interactive_walkthrough(...)` call. For `init_walk`: inject between reading `pending_proposals` from `slots/.bootstrap.yaml` and starting the `WalkController`; add a new `--skip-confirm: bool = False` Typer flag, default False; when True, bypass the confirm step (the skill flow sets this since it already called `taxonomy-review`). Skip the confirmation step in `init_root` when `batch` is true (batch mode is non-interactive by contract) and when `dry_run` is true AND `--json` (preserves existing `--json --dry-run` automation). Emit `proposed_structure_overview` in the `batch` mode JSON output
+
+- [ ] T098 [US6] Refactor `init_root` so that `_interactive_walkthrough` receives the post-confirm proposal list (depends on T097). Verify that the existing US1 integration tests (`tests/integration/test_bootstrap_end_to_end.py`) still pass — if any test asserts on the proposal order without going through the confirmation prompt, update the test fixture to either pass `--batch` or pre-feed `looks good` via CliRunner input
+
+- [ ] T099 [US6] Update `bis/cli.py:init_mine` (US5 mine subcommand) to also emit `proposed_structure_overview` in its JSON output (depends on T095) — the skill already calls `taxonomy-review` separately, but having the overview adjacent to `pending_proposals` lets the skill omit the extra round-trip if desired. No behavior change to the walk-through path
+
+### US6 docs
+
+- [ ] T100 [P] [US6] Update `specs/001-bootstrap-discovery/quickstart.md` to show the new default flow: `bis init` mines → prints structure overview → user picks `looks good` → walk-through. Add a second variant showing `reshape → split → walk` against the rebuilt taxonomy. One short paragraph; mirror the existing quickstart prose style
+
+- [ ] T101 [P] [US6] Update root `README.md` "Getting started" block: replace the existing `bis init` bullet with two short lines — first line describes the mine→confirm→walk flow, second line notes that structural edits (split/merge/rename/drop/add) are now reachable from the confirm step without aborting
+
+**Checkpoint**: `uv run bis init` against a real `gh auth` account prints the structure overview, accepts `looks good` or routes through a reshape loop, and then enters the walk-through against the (possibly-reshaped) proposal set. SC-013 is met: structural edits during a run can be applied at the confirmation step instead of mid-walk.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -254,6 +304,7 @@ Single-project Python CLI. Source under `bis/`, tests under `tests/`, skills und
 - **Phase 6 (US4)**: depends on Phase 3 — extends the bootstrap pipeline + skill; **independent of Phase 4 and Phase 5** (structure actions are orthogonal to deep-dive and to the conversational surface — they apply to whichever entry point the user uses)
 - **Phase 7 (Polish)**: depends on whichever stories are shipped
 - **Phase 8 (US5)**: depends on Phase 3 (existing CLI surface + walk-through entry point) and Phase 5 (the skill it refactors). **Independent of Phase 6** (US4 structure actions are applied at the proposal level before `bis init mine` persists `pending_proposals`, so the handoff carries an already-reshaped taxonomy through unchanged). T070 (spec backfill) MUST land first; T072–T075 (tests) MUST FAIL before T076+ implementations
+- **Phase 9 (US6)**: depends on Phase 3 (the default `bis init` flow it wraps) and Phase 6 (the structural primitives — `apply_structure_change`, `suggest_split`, `merge_proposals`, etc. — it surfaces in a new place). **Independent of Phase 4, 5, and 8** (US6 is a CLI interactive-flow change; it does not alter `bis init walk`, `bis init mine`, the skill flow, or the deep-dive offer). T087 (spec backfill) and T088 (schema additive) MUST land first; T089–T092 (tests) MUST FAIL before T093+ implementations land
 
 ### Critical-path ordering inside each phase
 
@@ -262,6 +313,7 @@ Single-project Python CLI. Source under `bis/`, tests under `tests/`, skills und
 - **Within Phase 5 (US3)**: T038 (test) before T039 (skill). T040 may be a no-op depending on the existing `.claude/skills/` symlink layout.
 - **Within Phase 6 (US4)**: T048–T051 (schema + spec extensions) first — these are the contract. Then T052–T059 (tests, all `[P]`) must FAIL before T060+ implementations land. Within implementation: T060/T061 are independent; T062 depends on T060+T061; T063 depends on T060; T064 depends on T062+T063; T065 depends on T064; T066 depends on T064; T067 depends on T064. T068/T069 (docs) come last but are `[P]` with each other.
 - **Within Phase 8 (US5)**: T070 (spec backfill) first — defines FR-021..FR-024 + SC-011..SC-012 the rest hangs off of. T071 (questionary dep) parallel with T070. T072–T075 (tests, all `[P]`) must FAIL before T076+ land. Within implementation: T076 (walk.py) and T078 (model + slots extension for `pending_proposals`) are independent and parallel; T077 (`bis init mine`) depends on T078; T079 (`bis init walk`) depends on T076 + T077 + T078; T080 (refactor `_interactive_walkthrough`) depends on T076 + T079; T081 (SKILL.md rewrite) depends on T077 + T079; T082 (new error envelopes) depends on T079. T083 (latency regression test) depends on T076. T084/T085/T086 (docs) are `[P]` with each other and land last.
+- **Within Phase 9 (US6)**: T087 (spec backfill) first — defines FR-025/FR-026 + SC-013 the rest hangs off of. T088 (schema additive) parallel with T087. T089–T092 (tests, all `[P]`) must FAIL before T093+ land. Within implementation: T093 and T094 (model additions) are independent and parallel; T095 (`build_structure_overview`) depends on T093; T096 (`_interactive_confirm_structure`) depends on T094 + T095; T097 (wire into `init_root`) depends on T096; T098 (regression check on existing US1 tests) depends on T097; T099 (mine subcommand overview field) depends on T095 and is independent of T096–T098. T100/T101 (docs) are `[P]` with each other and land last.
 
 ### Parallel Opportunities
 
@@ -279,6 +331,10 @@ Single-project Python CLI. Source under `bis/`, tests under `tests/`, skills und
 - **Phase 8 — tests**: T072, T073, T074, T075 all `[P]` (different files).
 - **Phase 8 — impl**: T076 and T078 in parallel after tests fail; T077 after T078; T079 after T076+T077+T078; T080/T081/T082 in parallel after T079.
 - **Phase 8 — polish**: T083, T084, T085, T086 all `[P]`.
+- **Phase 9 — setup**: T087 (spec) and T088 (schema) in parallel.
+- **Phase 9 — tests**: T089, T090, T091, T092 all `[P]` (different files).
+- **Phase 9 — impl**: T093 and T094 in parallel; T095 after T093; T096 after T094+T095; T097 after T096; T098 after T097; T099 after T095 (independent of T096–T098).
+- **Phase 9 — polish**: T100 and T101 in parallel.
 
 ### Parallel example — Phase 3 test wave
 
@@ -338,6 +394,7 @@ The MVP delivers genuine value: a user can go from zero slots to a confirmed slo
 - After Phase 4 → Phase 5 (skill) → ship as another minor; the skill is the most visible improvement for Claude Code users
 - After Phase 5 → Phase 6 (US4 slot-structure UX) → ship as another minor; this is the biggest user-experience improvement after MVP — removes the only known hand-edit (`bis/categories.py` reshape) from the real-world flow
 - After Phase 6 → **Phase 8 (US5 fast hand-off)** → ship as another minor; this collapses the per-slot LLM-turn loop into a single local walk-through, removing the 2–4 min of latency the user spends "just waiting" per session. P1 priority because it materially affects the existing MVP UX — every shipped bootstrap session benefits immediately
+- After Phase 8 → **Phase 9 (US6 structure-confirm in default flow)** → ship as another minor; promotes US4's taxonomy-review from an opt-in subcommand to a first-class step of `bis init`. P1 priority because it affects the default interactive entry point — every terminal-driven bootstrap session sees the new step
 - Phase 7 (polish) folds in alongside whichever stories ship
 
 ### Parallel team strategy
@@ -358,3 +415,5 @@ The MVP delivers genuine value: a user can go from zero slots to a confirmed slo
 - US4 spec drift: spec.md currently documents only accept/change/skip/defer (FR-004). T051 backfills FR-016..FR-020 before any code lands so contract tests have a documented target. Consider running `/speckit-clarify` against those FRs before T052–T059 are written if there's any uncertainty about exact wording — clarifying after tests land creates churn.
 - US5 spec drift: spec.md + the existing skill describe a per-slot conversational walk-through (FR-010 + Step 2b of `skills/bis-bootstrap/SKILL.md`). T070 backfills FR-021..FR-024 + SC-011..SC-012 before T076+ land. Same precedent as US4 — consider `/speckit-clarify` against the proposed FRs first if the wording (especially the SC-011 latency budget and SC-012 LLM-turn cap) needs sharpening.
 - US5 trust-boundary invariant: the hand-off does NOT introduce any new payload type. The LLM still calls `categories.infer_categories` with a `SafePayload` during `bis init mine`; nothing else crosses the boundary. The walk-through is fully local. Reviewers: re-run the `grep -r 'to_safe_payload\|SafePayload' bis/` invariant after T076–T082 land.
+- US6 spec drift: spec.md FR-017 currently allows the user to skip the taxonomy review. T087 tightens this to mandatory-in-default-interactive-flow (FR-025) and adds SC-013 measuring the share of structural edits applied at the confirm step vs mid-walk. The skill flow (US3/US5) is unaffected — it already calls `taxonomy-review` explicitly. Consider running `/speckit-clarify` against FR-025 first if the wording around "mandatory" vs "default" needs sharpening.
+- US6 architecture invariant: T096 introduces NO new structural primitives — it reuses `apply_structure_change`, `suggest_split`, `merge_proposals`, `apply_rename`, `apply_drop` from US4. The only delta is *where* in the flow they're offered and the new `applied_at_phase` field on `taxonomy_edits` (T094). Reviewers: ensure no logic from `bis/categories.py` or `bis/bootstrap.py` is duplicated into `bis/cli.py` — the confirm loop is a thin CLI prompt wrapper.
