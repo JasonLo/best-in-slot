@@ -1,37 +1,61 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.0.0 → 1.1.0
-Bump rationale: Raise Python floor from ≥3.11 to ≥3.14. MINOR per the
-governance policy ("materially expanded guidance") — the existing
-Principle IV toolchain is unchanged, but the runtime floor it depends on
-is tightened. Aligns the constitution with the README (which already
-flagged 3.14 as the new-project target) and standardises the slot
-example `pyproject.toml` pins on >=3.14 in the same change.
+Version change: 1.1.0 → 1.2.0
+Bump rationale: Add three new product-purpose principles (VI–VIII) that
+codify what BIS is *for*, complementing the existing five principles
+(I–V) that codify *how* it is built. MINOR per the governance policy —
+"new principle/section added or materially expanded guidance". No
+existing principle is removed, redefined, or relaxed.
+
+Principles added:
+  - VI. Mine the User's History, Don't Ask for It
+        Slot defaults MUST be derived from the user's profile (frequency
+        × recency across user + org repos). Manual / fallback picks MUST
+        be marked with `source:` and surfaced. Asking the user to declare
+        their stack from scratch is a failure mode.
+  - VII. Surface New Winners, Not Just Catalogue Old Ones
+        `bis discover` MUST proactively flag candidates that score
+        meaningfully higher than the current pick on dimensions overlapping
+        the user's profile signal, and the skill layer MUST emit a short
+        TL;DR (current pick → candidate, the 2–3 signals that flipped,
+        suggested action). Stale-slot detection runs on every `bis status`.
+  - VIII. Flag Outdated In-Package Usage
+        Beyond cross-package swaps, BIS MUST detect outdated *intra*-
+        package patterns (deprecated APIs, pre-major-version idioms) in
+        packages the user still depends on, record them under an
+        `outdated_patterns:` key on the relevant slot with a citation to
+        the modern equivalent, and surface them via `bis status` / a
+        dedicated subcommand.
+
+Principles changed: none (no removal, no incompatible redefinition).
 
 Sections modified:
-  - Tech Stack Constraints → Language/Version line
-
-Principles changed: none (no removal, no redefinition).
+  - Governance → Compliance review now also checks PRs that add an
+    outdated-pattern detector or a profile-derivation signal.
 
 Templates requiring updates:
-  - .specify/templates/plan-template.md     ✅ No edits; the Constitution Check gate references the principle by name, not by version pin.
-  - .specify/templates/spec-template.md     ✅ Compatible as-is.
-  - .specify/templates/tasks-template.md    ✅ Compatible as-is.
+  - .specify/templates/plan-template.md      ✅ No edits; the Constitution
+    Check gate references the constitution generically ("Gates determined
+    based on constitution file"), so the new principles are picked up
+    automatically.
+  - .specify/templates/spec-template.md      ✅ Compatible as-is.
+  - .specify/templates/tasks-template.md     ✅ Compatible as-is.
   - .specify/templates/checklist-template.md ✅ Compatible as-is.
-  - README.md                                ✅ Updated in the same change (single Python line now reads 3.14).
-  - slots/**/example/pyproject.toml          ✅ All 29 pinned to requires-python = ">=3.14".
+  - README.md                                ✅ Compatible — README already
+    describes the profile → discover → switch workflow; principles VI–VIII
+    formalise existing intent rather than introducing new surface area.
 
 Deferred TODOs:
-  - Pixi configs in slots/infra/pixi/ still pin python = "3.12.*".
-    These are documentation/recipe content, not project pins, so they
-    are addressed as a separate content edit, not as a constitution
-    amendment.
+  - The "outdated_patterns:" slot-YAML key in Principle VIII is not yet
+    implemented in `bis/slots.py` or `bis/models.py`. This amendment
+    establishes the contract; the schema migration is a separate feature.
 
 History:
   1.0.0 — Initial ratification (2026-05-22). Five principles + Tech Stack
-          Constraints + Skill / CLI Workflow + Governance. See git blame
-          for content.
+          Constraints + Skill / CLI Workflow + Governance.
+  1.1.0 — Raise Python floor to ≥3.14 (2026-05-22).
+  1.2.0 — Add product-purpose principles VI–VIII (2026-05-22).
 -->
 
 # Best-in-Slot Constitution
@@ -90,6 +114,51 @@ Auth is delegated to `gh auth`.
 already have `gh` configured; we get free auth, rate-limit handling, and
 enterprise/SSO support.
 
+### VI. Mine the User's History, Don't Ask for It
+The first answer to "what should I use?" MUST come from the user's own GitHub
+history, not from a generic recommendation. `bis profile` is the canonical
+source for initial picks: slot defaults MUST be derived from frequency ×
+recency of real usage across the user's repos (user + orgs, public + private).
+A slot pick that is not traceable to a profile signal MUST be marked with a
+`source:` field in the slot YAML (e.g. `source: profile`, `source: manual`,
+`source: default`) and surfaced in `bis status`. Asking the user to declare
+their stack from scratch — when a profile already exists — is a failure mode,
+not a fallback.
+**Rationale:** The product's whole edge over a static "awesome-X" list is that
+it grounds every claim in the user's actual code. Letting that signal degrade
+— even by silently accepting a pick the profile contradicts — destroys the
+differentiator.
+
+### VII. Surface New Winners, Not Just Catalogue Old Ones
+`bis discover` MUST proactively flag the case where a candidate scores
+meaningfully higher than the current pick on dimensions that overlap the
+user's profile signal. When such a flag fires, the skill layer MUST emit a
+short TL;DR update — current pick, candidate, the 2–3 signals that flipped,
+and a suggested action — not a wall of analysis. The "meaningfully higher"
+threshold MUST be a named constant in code (not a per-invocation argument),
+versioned alongside the scoring weights. Stale-slot detection (configurable
+threshold in `settings.yaml`) MUST run on every `bis status` invocation so a
+stale winner cannot hide between explicit `bis discover` runs.
+**Rationale:** A tool that requires the user to *ask* whether something has
+changed is no better than a bookmark. The product is the proactive nudge —
+delivered as a TL;DR, not a research paper.
+
+### VIII. Flag Outdated In-Package Usage
+Beyond cross-package swaps, BIS MUST detect outdated *intra*-package patterns
+— legacy APIs, deprecated config keys, pre-major-version idioms — inside
+packages the user still depends on (e.g. Pydantic v1 syntax in a Pydantic v2
+install, `requests.Session` patterns in code that has already migrated to
+`httpx`, Pandas `.append()` calls). Detected patterns MUST be recorded against
+the relevant slot under an `outdated_patterns:` key, each entry citing the
+modern equivalent and a stable reference (changelog, upgrade guide, or
+release notes URL). The CLI MUST expose them via `bis status` and/or a
+dedicated subcommand; the skill layer MUST translate them into actionable
+diffs the user can apply, not just prose.
+**Rationale:** "Right package, wrong decade" is the silent killer of
+codebases. Swapping libraries is loud and shows up in dependency files;
+staying on a library while its idioms move is invisible to every other tool —
+exactly the gap BIS is positioned to close.
+
 ## Tech Stack Constraints
 
 - **Language/Version:** Python ≥ 3.14. No Python 2, no untyped code paths in
@@ -137,12 +206,13 @@ enterprise/SSO support.
     guidance.
   - **PATCH:** Wording, typo, clarification with no behavioural change.
 - Compliance review: Every PR that adds a `bis` subcommand, a skill, a slot
-  category, or a scoring dimension MUST be checked against Principles I–V
-  before merge. The Constitution Check gate in `plan-template.md` enforces
-  this for spec-kit-driven features.
+  category, a scoring dimension, an outdated-pattern detector, or a
+  profile-derivation signal MUST be checked against Principles I–VIII before
+  merge. The Constitution Check gate in `plan-template.md` enforces this for
+  spec-kit-driven features.
 - Complexity must be justified. If a feature appears to require violating a
   principle, the PR MUST include a "Complexity Justification" section
   explaining why no compliant design exists. Reviewers SHOULD push back on
   unjustified violations.
 
-**Version**: 1.1.0 | **Ratified**: 2026-05-22 | **Last Amended**: 2026-05-22
+**Version**: 1.2.0 | **Ratified**: 2026-05-22 | **Last Amended**: 2026-05-22
