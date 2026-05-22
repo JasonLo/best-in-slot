@@ -1,4 +1,4 @@
-"""Integration test: `bis bootstrap taxonomy-review --json` pre-walk overview (T055).
+"""Integration test: `bis init taxonomy-review --json` pre-walk overview (T055).
 
 Emits the full proposal list with per-proposal split suggestions, before any
 walk-through prompts. The skill uses this as the "looks good / reshape"
@@ -54,7 +54,7 @@ def patched_pipeline(monkeypatch, tmp_slots_root, tmp_cache_root):
 
 def test_taxonomy_review_emits_all_proposals(patched_pipeline):
     runner = CliRunner()
-    result = runner.invoke(cli_mod.app, ["bootstrap", "taxonomy-review", "--json"])
+    result = runner.invoke(cli_mod.app, ["init", "taxonomy-review", "--json"])
     assert result.exit_code == 0, result.stderr or result.stdout
     payload = json.loads(result.stdout)
     assert payload["mode"] == "taxonomy-review"
@@ -65,7 +65,7 @@ def test_taxonomy_review_emits_all_proposals(patched_pipeline):
 
 def test_taxonomy_review_proposal_carries_members(patched_pipeline):
     runner = CliRunner()
-    result = runner.invoke(cli_mod.app, ["bootstrap", "taxonomy-review", "--json"])
+    result = runner.invoke(cli_mod.app, ["init", "taxonomy-review", "--json"])
     payload = json.loads(result.stdout)
     for proposal in payload["proposals"]:
         assert "category" in proposal
@@ -81,7 +81,7 @@ def test_taxonomy_review_suggest_split_is_present(patched_pipeline):
     """
 
     runner = CliRunner()
-    result = runner.invoke(cli_mod.app, ["bootstrap", "taxonomy-review", "--json"])
+    result = runner.invoke(cli_mod.app, ["init", "taxonomy-review", "--json"])
     payload = json.loads(result.stdout)
     for proposal in payload["proposals"]:
         # field must always be present (either array or null)
@@ -95,12 +95,12 @@ def test_taxonomy_review_then_walkthrough_uses_rebuilt_taxonomy(patched_pipeline
 
     runner = CliRunner()
     # 1. Review
-    runner.invoke(cli_mod.app, ["bootstrap", "taxonomy-review", "--json"])
+    runner.invoke(cli_mod.app, ["init", "taxonomy-review", "--json"])
     # 2. Apply a rename via confirm
     result = runner.invoke(
         cli_mod.app,
         [
-            "bootstrap",
+            "init",
             "confirm",
             "--category",
             "databases",

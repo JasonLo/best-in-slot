@@ -46,7 +46,7 @@ def runner():
 
 def test_pending_includes_slots_without_readme(tmp_slots_root, runner):
     _seed_slot(tmp_slots_root, "python-web", "fastapi", with_readme=False)
-    result = runner.invoke(cli_mod.app, ["bootstrap", "pending-dives", "--json"])
+    result = runner.invoke(cli_mod.app, ["init", "pending-dives", "--json"])
     assert result.exit_code == 0, result.stderr
     payload = json.loads(result.stdout)
     assert any(p["category"] == "python-web" for p in payload["pending"])
@@ -54,13 +54,13 @@ def test_pending_includes_slots_without_readme(tmp_slots_root, runner):
 
 def test_pending_excludes_slots_with_deep_dive_section(tmp_slots_root, runner):
     _seed_slot(tmp_slots_root, "python-web", "fastapi", with_readme=True, with_deep_dive=True)
-    result = runner.invoke(cli_mod.app, ["bootstrap", "pending-dives", "--json"])
+    result = runner.invoke(cli_mod.app, ["init", "pending-dives", "--json"])
     payload = json.loads(result.stdout)
     assert all(p["category"] != "python-web" for p in payload["pending"])
 
 
 def test_pending_includes_slots_with_readme_but_no_deep_dive(tmp_slots_root, runner):
     _seed_slot(tmp_slots_root, "python-web", "fastapi", with_readme=True, with_deep_dive=False)
-    result = runner.invoke(cli_mod.app, ["bootstrap", "pending-dives", "--json"])
+    result = runner.invoke(cli_mod.app, ["init", "pending-dives", "--json"])
     payload = json.loads(result.stdout)
     assert any(p["category"] == "python-web" for p in payload["pending"])

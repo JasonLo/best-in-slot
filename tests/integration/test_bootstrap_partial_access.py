@@ -82,7 +82,7 @@ def test_partial_access_completes_and_records_skipped_source(partial_access_doub
 
 def test_partial_access_batch_emits_proposals_plus_skipped(partial_access_doubles):
     runner = CliRunner()
-    result = runner.invoke(cli_mod.app, ["bootstrap", "--json", "--batch"])
+    result = runner.invoke(cli_mod.app, ["init", "--json", "--batch"])
     assert result.exit_code == 0, result.stderr or result.stdout
     payload = json.loads(result.stdout)
     skipped_ids = {s["source_id"] for s in payload["skipped_sources"]}
@@ -93,7 +93,7 @@ def test_partial_access_batch_emits_proposals_plus_skipped(partial_access_double
 
 def test_partial_access_does_not_emit_auth_error_envelope(partial_access_doubles):
     runner = CliRunner()
-    result = runner.invoke(cli_mod.app, ["bootstrap", "--json", "--batch"])
+    result = runner.invoke(cli_mod.app, ["init", "--json", "--batch"])
     payload = json.loads(result.stdout)
     # gh auth is fine; only one org is gated. The CLI must not conflate this
     # with a global auth failure.

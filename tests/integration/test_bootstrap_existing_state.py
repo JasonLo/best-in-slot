@@ -69,7 +69,7 @@ def _seed_existing_slot(slots_dir, category="python-web", pick="django"):
 def test_batch_without_on_existing_errors_loudly(patched_pipeline, tmp_slots_root):
     _seed_existing_slot(tmp_slots_root)
     runner = CliRunner()
-    result = runner.invoke(cli_mod.app, ["bootstrap", "--json", "--batch"])
+    result = runner.invoke(cli_mod.app, ["init", "--json", "--batch"])
     assert result.exit_code == 2
     payload = json.loads(result.stdout)
     assert payload["mode"] == "error"
@@ -82,7 +82,7 @@ def test_batch_without_on_existing_errors_loudly(patched_pipeline, tmp_slots_roo
 def test_batch_with_skip_preserves_existing(patched_pipeline, tmp_slots_root):
     _seed_existing_slot(tmp_slots_root)
     runner = CliRunner()
-    result = runner.invoke(cli_mod.app, ["bootstrap", "--json", "--batch", "--on-existing=skip"])
+    result = runner.invoke(cli_mod.app, ["init", "--json", "--batch", "--on-existing=skip"])
     assert result.exit_code == 0, result.stderr
     state = yaml.safe_load((tmp_slots_root / "python-web.yaml").read_text())
     assert state["pick"] == "django"  # unchanged
@@ -94,7 +94,7 @@ def test_replace_records_bootstrap_replace_history(patched_pipeline, tmp_slots_r
     result = runner.invoke(
         cli_mod.app,
         [
-            "bootstrap",
+            "init",
             "confirm",
             "--category",
             "python-web",

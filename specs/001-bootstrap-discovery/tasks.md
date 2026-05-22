@@ -58,20 +58,20 @@ Single-project Python CLI. Source under `bis/`, tests under `tests/`, skills und
 - [x] T009 Implement `bis/cli.py` Typer app skeleton: `app = typer.Typer(no_args_is_help=True)`, a `__main__` guard, and a stub `@app.command()` for `bootstrap` that prints a "not yet implemented" message. Wired so `uv run bis --help` lists `bootstrap`.
 - [x] T010 [P] Create `tests/conftest.py` with shared fixtures: `tmp_cache_root` (monkeypatches the `.bis/cache/` path to a `tmp_path`), `gh_stub` (registers a fake `gh` executable on `PATH` that reads canned JSON responses from `tests/fixtures/gh/`), `frozen_now` (freezes `datetime.now` for deterministic recency math)
 
-**Checkpoint**: `uv run pytest tests/conftest.py --collect-only` succeeds; `uv run bis bootstrap` prints the stub message.
+**Checkpoint**: `uv run pytest tests/conftest.py --collect-only` succeeds; `uv run bis init` prints the stub message.
 
 ---
 
 ## Phase 3: User Story 1 — Propose + walk-through from repo history (Priority: P1) 🎯 MVP
 
-**Goal**: A user with no slots runs `bis bootstrap`, sees a ranked proposal grouped languages → frameworks → tooling, walks through each slot with accept / change (observed or free-form) / skip / defer, and ends with persisted `slots/{category}.yaml` files. Mining is cached for ~24h. Privacy invariant FR-013 is enforced at the type level.
+**Goal**: A user with no slots runs `bis init`, sees a ranked proposal grouped languages → frameworks → tooling, walks through each slot with accept / change (observed or free-form) / skip / defer, and ends with persisted `slots/{category}.yaml` files. Mining is cached for ~24h. Privacy invariant FR-013 is enforced at the type level.
 
-**Independent Test**: From an empty `slots/` directory, run `uv run bis bootstrap` against the `gh_stub` fixture; verify the expected slot YAMLs land, `slots/.bootstrap.yaml` records any deferrals, and the cache contains per-repo scan files.
+**Independent Test**: From an empty `slots/` directory, run `uv run bis init` against the `gh_stub` fixture; verify the expected slot YAMLs land, `slots/.bootstrap.yaml` records any deferrals, and the cache contains per-repo scan files.
 
 ### Tests for User Story 1 (write FIRST; ensure they FAIL before implementation)
 
-- [x] T011 [P] [US1] Contract test: validate `bis bootstrap --json --batch` output against `specs/001-bootstrap-discovery/contracts/bootstrap.schema.json` in `tests/contract/test_bootstrap_json_output.py`
-- [x] T012 [P] [US1] Contract test: validate `bis bootstrap confirm --json` output (one per action: accept/change/skip/defer) against the same schema's `confirm` branch in `tests/contract/test_bootstrap_confirm_output.py`
+- [x] T011 [P] [US1] Contract test: validate `bis init --json --batch` output against `specs/001-bootstrap-discovery/contracts/bootstrap.schema.json` in `tests/contract/test_bootstrap_json_output.py`
+- [x] T012 [P] [US1] Contract test: validate `bis init confirm --json` output (one per action: accept/change/skip/defer) against the same schema's `confirm` branch in `tests/contract/test_bootstrap_confirm_output.py`
 - [x] T013 [P] [US1] Contract test: validate walk-through event payloads against `specs/001-bootstrap-discovery/contracts/walkthrough-events.schema.json` in `tests/contract/test_walkthrough_events.py`
 - [x] T014 [P] [US1] Integration test: end-to-end empty-slots bootstrap with `gh_stub` + fixture repo manifests; assert proposal contents, walk-through order (languages → frameworks → tooling), and persisted `slots/*.yaml` shape in `tests/integration/test_bootstrap_end_to_end.py`
 - [x] T015 [P] [US1] Integration test: resume after abort — deferred slots persist in `slots/.bootstrap.yaml` and resurface at the top of the next run (FR-012, SC-007, R-9, R-11) in `tests/integration/test_bootstrap_resume_deferred.py`
@@ -94,10 +94,10 @@ Single-project Python CLI. Source under `bis/`, tests under `tests/`, skills und
 - [x] T029 [US1] Implement `bis/categories.py` (depends on T007, T027): (a) `CATEGORY_TABLE: dict[str, tuple[str, Literal["language","framework","tooling"]]]` heuristic table seeded with packages from the existing `slots/` content (fastapi, pandas, ruff, uv, etc.); (b) `infer_categories(safe: SafePayload) -> dict[str, tuple[str, str]]` LLM fallback for unknowns; (c) `evidence_strength(proposal: CategoryProposal) -> float` per R-6; (d) `order_for_walkthrough(proposals: list[CategoryProposal], deferred: list[str]) -> list[CategoryProposal]` per R-11
 - [x] T030 [US1] Implement `bis/slots.py` (depends on T007): `read_slot_state(category: str) -> SlotState | None`, `write_slot_state(state: SlotState) -> Path` (atomic via temp + rename), `append_history(category: str, entry: HistoryEntry) -> None`, `read_bootstrap_run_state() -> BootstrapRunState | None`, `write_bootstrap_run_state(state: BootstrapRunState) -> Path`, `list_existing_slot_categories() -> list[str]`. Append-only history enforced at this layer.
 - [x] T031 [US1] Implement `bis/bootstrap.py` orchestration (depends on T025–T030): `detect_existing_state() -> list[str]`, `mine_profile(window: timedelta) -> ProfileSnapshot` (uses github + scanner + cache), `build_proposals(profile: ProfileSnapshot) -> list[CategoryProposal]` (uses categories), `walkthrough_iter(proposals: list[CategoryProposal]) -> Iterator[CategoryProposal]` (applies ordering, surfaces deferred first), `apply_decision(decision: SlotDecision, proposal: CategoryProposal) -> Path | None` (uses slots; returns slot YAML path or None for skip)
-- [x] T032 [US1] Implement the `bis bootstrap` CLI surface in `bis/cli.py` (depends on T031): `bis bootstrap` (interactive, default), `bis bootstrap --json --batch`, `bis bootstrap confirm --category X --action {accept|change|skip|defer} [--pick name] --json`, flags `--on-existing={merge|replace|skip}`, `--dry-run`, `--print-llm-payloads`, `--no-deep-dive-prompt`. Outputs strictly match the contract schemas (T011–T013 enforce this). Note: `--print-llm-payloads` and `--no-deep-dive-prompt` flags are not yet on the CLI — the skill currently handles deep-dive prompting and no LLM payload print path exists. Tracked as a follow-up; not blocking the MVP.
+- [x] T032 [US1] Implement the `bis init` CLI surface in `bis/cli.py` (depends on T031): `bis init` (interactive, default), `bis init --json --batch`, `bis init confirm --category X --action {accept|change|skip|defer} [--pick name] --json`, flags `--on-existing={merge|replace|skip}`, `--dry-run`, `--print-llm-payloads`, `--no-deep-dive-prompt`. Outputs strictly match the contract schemas (T011–T013 enforce this). Note: `--print-llm-payloads` and `--no-deep-dive-prompt` flags are not yet on the CLI — the skill currently handles deep-dive prompting and no LLM payload print path exists. Tracked as a follow-up; not blocking the MVP.
 - [x] T033 [US1] Wire error envelope per `contracts/bootstrap.schema.json` (depends on T032): `gh_auth_missing` when `gh auth status` fails, `no_repos_in_window` when mining returns empty, `existing_state_unresolved` when batch mode lacks `--on-existing`, `scanner_failed` on uncaught parser error. Each error emits `{mode: "error", error: {code, message, hint}}`.
 
-**Checkpoint**: All US1 tests pass. `uv run bis bootstrap` against a real `gh auth` session produces slots end-to-end. SC-001 (E2E under 30 min), SC-006 (mining under 5 min for ≤50 repos), SC-009 (cache restart ≤25% cold-run time) are met.
+**Checkpoint**: All US1 tests pass. `uv run bis init` against a real `gh auth` session produces slots end-to-end. SC-001 (E2E under 30 min), SC-006 (mining under 5 min for ≤50 repos), SC-009 (cache restart ≤25% cold-run time) are met.
 
 ---
 
@@ -114,8 +114,8 @@ Single-project Python CLI. Source under `bis/`, tests under `tests/`, skills und
 
 ### Implementation for User Story 2
 
-- [x] T036 [US2] Add `bis bootstrap pending-dives --json` subcommand to `bis/cli.py` (depends on T032): enumerates confirmed slot categories whose YAML lacks deep-dive enrichment markers, for the skill's batch "all-later" path (R-10)
-- [~] T037 [US2] Extend the `RunSummary` event emission in `bis/bootstrap.py` (depends on T031) to include `deep_dive_failures: list[{category, error}]`, populated by the skill via a subsequent `bis bootstrap confirm --deep-dive-result ...` flag (or equivalent — design fix during impl) — partial: the `RunSummary` schema accepts `deep_dive_failures`, and the bootstrap pipeline persists run state, but the CLI does not yet emit a `RunSummary` JSON event nor accept `--deep-dive-result`. The skill aggregates failures conversationally. Backfill if/when a non-skill consumer needs it.
+- [x] T036 [US2] Add `bis init pending-dives --json` subcommand to `bis/cli.py` (depends on T032): enumerates confirmed slot categories whose YAML lacks deep-dive enrichment markers, for the skill's batch "all-later" path (R-10)
+- [~] T037 [US2] Extend the `RunSummary` event emission in `bis/bootstrap.py` (depends on T031) to include `deep_dive_failures: list[{category, error}]`, populated by the skill via a subsequent `bis init confirm --deep-dive-result ...` flag (or equivalent — design fix during impl) — partial: the `RunSummary` schema accepts `deep_dive_failures`, and the bootstrap pipeline persists run state, but the CLI does not yet emit a `RunSummary` JSON event nor accept `--deep-dive-result`. The skill aggregates failures conversationally. Backfill if/when a non-skill consumer needs it.
 
 **Checkpoint**: US1 + US2 tests both pass. A walk-through end-to-end produces deep-dived slots when the user accepts the offer.
 
@@ -125,7 +125,7 @@ Single-project Python CLI. Source under `bis/`, tests under `tests/`, skills und
 
 **Goal**: A user invokes the bootstrap in Claude Code via a slash command; the skill drives the conversation, calling the CLI in `--json --batch` and `confirm` modes; resulting state is identical to a pure-CLI run.
 
-**Independent Test**: Run `/bis-bootstrap` in Claude Code and a `uv run bis bootstrap` in a terminal against the same fixture; assert the resulting `slots/*.yaml` are byte-identical (modulo `decided_at` timestamps).
+**Independent Test**: Run `/bis-bootstrap` in Claude Code and a `uv run bis init` in a terminal against the same fixture; assert the resulting `slots/*.yaml` are byte-identical (modulo `decided_at` timestamps).
 
 ### Tests for User Story 3
 
@@ -133,7 +133,7 @@ Single-project Python CLI. Source under `bis/`, tests under `tests/`, skills und
 
 ### Implementation for User Story 3
 
-- [x] T039 [US3] Create `skills/bis-bootstrap/SKILL.md` with frontmatter (name, description, trigger `/bis-bootstrap` + natural-language triggers like "bootstrap my slots", "set up my best-in-slot"), and a body that: (a) checks `gh auth status` and `uv` availability, (b) detects existing slots and prompts merge/replace/skip if needed, (c) calls `uv run bis bootstrap --json --batch --on-existing=<choice>`, (d) walks the user through each proposal in conversation per `walkthrough-events.schema.json`, (e) calls `uv run bis bootstrap confirm ...` per decision, (f) offers `/deep-dive` per accepted/changed slot with the four-way prompt, (g) renders the `RunSummary` at the end
+- [x] T039 [US3] Create `skills/bis-bootstrap/SKILL.md` with frontmatter (name, description, trigger `/bis-bootstrap` + natural-language triggers like "bootstrap my slots", "set up my best-in-slot"), and a body that: (a) checks `gh auth status` and `uv` availability, (b) detects existing slots and prompts merge/replace/skip if needed, (c) calls `uv run bis init --json --batch --on-existing=<choice>`, (d) walks the user through each proposal in conversation per `walkthrough-events.schema.json`, (e) calls `uv run bis init confirm ...` per decision, (f) offers `/deep-dive` per accepted/changed slot with the four-way prompt, (g) renders the `RunSummary` at the end
 - [x] T040 [US3] Ensure `.claude/skills/` symlink (or whatever the project uses) exposes `skills/bis-bootstrap/`. If the symlink is per-skill, add it; if it's the whole `skills/` dir, no action needed — verify by running `ls .claude/skills/bis-bootstrap/SKILL.md`
 
 **Checkpoint**: All three user stories work independently. The bootstrap skill is discoverable as `/bis-bootstrap` in Claude Code.
@@ -158,7 +158,7 @@ Single-project Python CLI. Source under `bis/`, tests under `tests/`, skills und
 ### Tests for User Story 4 (write FIRST, ensure FAIL before T060+)
 
 - [x] T052 [P] [US4] Contract test: `taxonomy_review_presented` and `structure_action_*` events validate against the extended schema; existing event payloads still validate (additive-change regression) in `tests/contract/test_walkthrough_events_structure.py`
-- [x] T053 [P] [US4] Contract test: `bis bootstrap confirm --action {split|merge|rename|drop|add}` JSON outputs validate against the extended `bootstrap.schema.json` in `tests/contract/test_bootstrap_confirm_structure_output.py`
+- [x] T053 [P] [US4] Contract test: `bis init confirm --action {split|merge|rename|drop|add}` JSON outputs validate against the extended `bootstrap.schema.json` in `tests/contract/test_bootstrap_confirm_structure_output.py`
 - [x] T054 [P] [US4] Integration test: end-to-end reshape — fixture proposes `{python-tooling, python-web, databases, docs}`; user issues split(python-tooling → 5 sub-slots), merge(docs into python-web), rename(databases → datastore), drop(one auto-generated sub-slot), add(custom `infra` slot with `terraform`); resulting `slots/*.yaml` set matches expected names + pick assignments in `tests/integration/test_bootstrap_structure_reshape.py`
 - [x] T055 [P] [US4] Integration test: pre-walk `taxonomy_review` path — bootstrap emits the full proposal list, user selects "reshape", applies one split, exits review mode, walk-through then iterates the rebuilt taxonomy in FR-014 order in `tests/integration/test_bootstrap_taxonomy_review.py`
 - [x] T056 [P] [US4] Integration test: resume after structural edits — user applies split + drop then aborts; next bootstrap run reads `slots/.bootstrap.yaml`, replays `taxonomy_edits` against the fresh proposal set, and re-presents the rebuilt taxonomy without asking the user to redo the structure decisions in `tests/integration/test_bootstrap_structure_resume.py`
@@ -172,9 +172,9 @@ Single-project Python CLI. Source under `bis/`, tests under `tests/`, skills und
 - [x] T061 [P] [US4] Extend `bis/categories.py` with three pure helpers: `suggest_split(proposal: CategoryProposal) -> list[CategoryProposal] | None` (uses `CATEGORY_TABLE` reverse-lookup; returns None when no split possible), `merge_proposals(*proposals: CategoryProposal) -> CategoryProposal` (evidence union per T058), `apply_rename(proposal: CategoryProposal, new_name: str) -> CategoryProposal` (identity on evidence). All deterministic; no LLM calls — keeps FR-013 trust boundary intact (FR-020)
 - [x] T062 [US4] Extend `bis/bootstrap.py` (depends on T060, T061): add `apply_structure_change(change: StructureChange, proposals: list[CategoryProposal]) -> list[CategoryProposal]` (pure on the proposal list, dispatches on `kind`), and `replay_taxonomy_edits(proposals: list[CategoryProposal], edits: list[StructureChange]) -> list[CategoryProposal]` for resume. Update `walkthrough_iter` so that after any structure change the iterator re-applies FR-014 ordering against the rebuilt proposal set (do not re-sort during iteration — checkpoint at each structure-change boundary)
 - [x] T063 [US4] Extend `bis/slots.py` (depends on T060): `write_bootstrap_run_state` persists `taxonomy_edits` (append-only — never rewrite history), `read_bootstrap_run_state` returns them. Add `append_taxonomy_edit(change: StructureChange) -> None` mirroring the existing `append_history` shape so the invariant is enforced at the storage layer, not the caller
-- [x] T064 [US4] Extend `bis/cli.py` (depends on T062, T063): add `bis bootstrap taxonomy-review --json` (emits the full proposal-list overview event with `suggest_split` annotations per proposal); extend `bis bootstrap confirm` with `--action {split,merge,rename,drop,add}` and aux flags `--into <name1,name2,...>`, `--with <category>`, `--to-name <name>`, `--category <name> --pick <pkg>`. Output strictly matches the extended `bootstrap.schema.json` (T053 enforces)
-- [x] T065 [US4] Add `bis bootstrap restructure` Typer subcommand to `bis/cli.py` (depends on T064): enters the taxonomy-edit flow against the *last cached proposal set* (read from `slots/.bootstrap.yaml`), without re-mining. Errors with `no_prior_proposal` envelope when run on a fresh project
-- [x] T066 [US4] Update `skills/bis-bootstrap/SKILL.md` (depends on T064): (a) insert pre-walk taxonomy-review step that calls `uv run bis bootstrap taxonomy-review --json`, renders the full proposal list, asks `[looks good / reshape]`; (b) extend the per-slot prompt with a secondary tier of structural actions presented compactly (`structural: split | merge | rename | drop`) so the primary accept/change/skip/defer prompt stays one-line; (c) "add custom slot" affordance available at any pause; (d) render the structural changes summary (count of splits/merges/renames/drops/adds) in the final `RunSummary` block
+- [x] T064 [US4] Extend `bis/cli.py` (depends on T062, T063): add `bis init taxonomy-review --json` (emits the full proposal-list overview event with `suggest_split` annotations per proposal); extend `bis init confirm` with `--action {split,merge,rename,drop,add}` and aux flags `--into <name1,name2,...>`, `--with <category>`, `--to-name <name>`, `--category <name> --pick <pkg>`. Output strictly matches the extended `bootstrap.schema.json` (T053 enforces)
+- [x] T065 [US4] Add `bis init restructure` Typer subcommand to `bis/cli.py` (depends on T064): enters the taxonomy-edit flow against the *last cached proposal set* (read from `slots/.bootstrap.yaml`), without re-mining. Errors with `no_prior_proposal` envelope when run on a fresh project
+- [x] T066 [US4] Update `skills/bis-bootstrap/SKILL.md` (depends on T064): (a) insert pre-walk taxonomy-review step that calls `uv run bis init taxonomy-review --json`, renders the full proposal list, asks `[looks good / reshape]`; (b) extend the per-slot prompt with a secondary tier of structural actions presented compactly (`structural: split | merge | rename | drop`) so the primary accept/change/skip/defer prompt stays one-line; (c) "add custom slot" affordance available at any pause; (d) render the structural changes summary (count of splits/merges/renames/drops/adds) in the final `RunSummary` block
 - [x] T067 [US4] Wire error envelope additions to `bis/cli.py` per `bootstrap.schema.json` (depends on T064): `unknown_category` (rename/merge/drop target doesn't exist in current proposal set), `split_not_supported` (`suggest_split` returned None and no user-supplied partition provided), `merge_incompatible_types` (e.g., refusing to merge a `language` proposal with a `tooling` proposal — catches the `ValueError` raised in T058), `no_prior_proposal` (T065 entry point with empty `.bootstrap.yaml`). Each emits `{mode: "error", error: {code, message, hint}}`
 
 ### US4 docs
@@ -182,13 +182,13 @@ Single-project Python CLI. Source under `bis/`, tests under `tests/`, skills und
 - [x] T068 [P] [US4] Update `specs/001-bootstrap-discovery/quickstart.md` with a worked reshape example: bootstrap proposes `python-tooling`, user issues `split` conversationally, walks the 5 resulting sub-slots, ends with the rebuilt structure persisted. Mirror the existing quickstart's prose style.
 - [x] T069 [P] [US4] Update root `README.md` to mention slot-structure reshaping (split/merge/rename/drop/add) as a bootstrap capability — one-line addition under the existing "Getting started" block; link to the US4 section of the quickstart.
 
-**Checkpoint**: At this point US4 is independently testable — running `uv run bis bootstrap` against any fixture proposal set should let the user reshape the taxonomy conversationally and persist a `slots/*.yaml` set that matches the rebuilt structure, with `slots/.bootstrap.yaml` containing a replayable `taxonomy_edits` log.
+**Checkpoint**: At this point US4 is independently testable — running `uv run bis init` against any fixture proposal set should let the user reshape the taxonomy conversationally and persist a `slots/*.yaml` set that matches the rebuilt structure, with `slots/.bootstrap.yaml` containing a replayable `taxonomy_edits` log.
 
 ---
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [x] T041 [P] Update root `README.md` to add a brief "Getting started" section linking to `specs/001-bootstrap-discovery/quickstart.md`; add a `bis bootstrap` row to the slot index introduction
+- [x] T041 [P] Update root `README.md` to add a brief "Getting started" section linking to `specs/001-bootstrap-discovery/quickstart.md`; add a `bis init` row to the slot index introduction
 - [x] T042 [P] Run `uv run ty check bis tests` and resolve any type errors (constitution: standalone type hints on all public functions)
 - [x] T043 [P] Run `uv run ruff check bis tests && uv run ruff format --check bis tests` and fix
 - [x] T044 [P] Add `bis status` Typer subcommand stub in `bis/cli.py` (just prints "TODO" with a pointer to the planned feature) — referenced in `quickstart.md`; full implementation belongs to a future feature
@@ -262,7 +262,7 @@ Task: "Implement bis/cache.py"
 1. Complete Phase 1 (Setup) — toolchain online
 2. Complete Phase 2 (Foundational) — models, config, CLI skeleton, test infra
 3. Complete Phase 3 (US1) — the full bootstrap pipeline with all tests passing
-4. **STOP and VALIDATE**: run `uv run bis bootstrap` against a real `gh auth` account; confirm SC-001/002/006 hold; tag the release as MVP
+4. **STOP and VALIDATE**: run `uv run bis init` against a real `gh auth` account; confirm SC-001/002/006 hold; tag the release as MVP
 
 The MVP delivers genuine value: a user can go from zero slots to a confirmed slot set, even without the deep-dive chaining or the conversational skill.
 

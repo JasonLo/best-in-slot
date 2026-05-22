@@ -110,7 +110,7 @@ class SafePayload(BaseModel):
 ## Decision-phase models
 
 ### `SlotDecision`
-The user's response to one `CategoryProposal`. Emitted by `bis bootstrap confirm ...` as JSON. Pick actions (`accept`, `change`) persist into `SlotState.history`; structure actions (`split`, `merge`, `rename`, `drop`, `add`) are translated into a `StructureChange` (see below) and persist into `BootstrapRunState.taxonomy_edits`. `skip`/`defer` persist into `BootstrapRunState` only.
+The user's response to one `CategoryProposal`. Emitted by `bis init confirm ...` as JSON. Pick actions (`accept`, `change`) persist into `SlotState.history`; structure actions (`split`, `merge`, `rename`, `drop`, `add`) are translated into a `StructureChange` (see below) and persist into `BootstrapRunState.taxonomy_edits`. `skip`/`defer` persist into `BootstrapRunState` only.
 
 ```python
 class SlotDecision(BaseModel):

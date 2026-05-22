@@ -78,7 +78,7 @@ def patched_pipeline(monkeypatch, tmp_slots_root, tmp_cache_root):
 
 def test_batch_mode_emits_ranked_proposals(patched_pipeline):
     runner = CliRunner()
-    result = runner.invoke(cli_mod.app, ["bootstrap", "--json", "--batch"])
+    result = runner.invoke(cli_mod.app, ["init", "--json", "--batch"])
     assert result.exit_code == 0, result.stderr
     payload = json.loads(result.stdout)
     # Walk-through order: languages → frameworks → tooling.
@@ -88,7 +88,7 @@ def test_batch_mode_emits_ranked_proposals(patched_pipeline):
 
 def test_batch_mode_proposals_contain_evidence(patched_pipeline):
     runner = CliRunner()
-    result = runner.invoke(cli_mod.app, ["bootstrap", "--json", "--batch"])
+    result = runner.invoke(cli_mod.app, ["init", "--json", "--batch"])
     payload = json.loads(result.stdout)
     for p in payload["proposals"]:
         assert p["evidence_repo_count"] >= 1
@@ -101,7 +101,7 @@ def test_confirm_writes_slot_yaml(patched_pipeline, tmp_slots_root):
     result = runner.invoke(
         cli_mod.app,
         [
-            "bootstrap",
+            "init",
             "confirm",
             "--category",
             "python-web",
@@ -129,7 +129,7 @@ def test_confirm_change_records_history_with_new_pick(patched_pipeline, tmp_slot
     result = runner.invoke(
         cli_mod.app,
         [
-            "bootstrap",
+            "init",
             "confirm",
             "--category",
             "python-web",

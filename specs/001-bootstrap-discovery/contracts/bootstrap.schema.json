@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://best-in-slot.local/contracts/001-bootstrap-discovery/bootstrap.schema.json",
-  "title": "bis bootstrap — JSON output contract",
-  "description": "Validates the structured output of `bis bootstrap` subcommands. Used by the bootstrap skill and by any other agent or script driving the CLI in --json mode.",
+  "title": "bis init — JSON output contract",
+  "description": "Validates the structured output of `bis init` subcommands. Used by the bootstrap skill and by any other agent or script driving the CLI in --json mode.",
   "$defs": {
     "RepoRef": {
       "type": "object",
@@ -165,7 +165,7 @@
   },
   "oneOf": [
     {
-      "title": "bis bootstrap --json --batch result",
+      "title": "bis init --json --batch result",
       "description": "Full proposal set, no walk-through prompts. Returned in one document.",
       "type": "object",
       "required": ["mode", "run_id", "started_at", "proposals", "skipped_sources"],
@@ -192,7 +192,7 @@
       }
     },
     {
-      "title": "bis bootstrap confirm result",
+      "title": "bis init confirm result",
       "description": "Result of applying a single user decision to one proposed slot. For structure actions (split/merge/rename/drop/add), `structure_change` is populated; for pick actions (accept/change/skip/defer), `slot_yaml_written` is populated when a slot file was written.",
       "type": "object",
       "required": ["mode", "decision"],
@@ -210,8 +210,8 @@
       }
     },
     {
-      "title": "bis bootstrap taxonomy-review result",
-      "description": "Pre-walk overview of the full proposal set, with per-proposal split suggestions where the heuristic table can offer one. Emitted by `bis bootstrap taxonomy-review --json`.",
+      "title": "bis init taxonomy-review result",
+      "description": "Pre-walk overview of the full proposal set, with per-proposal split suggestions where the heuristic table can offer one. Emitted by `bis init taxonomy-review --json`.",
       "type": "object",
       "required": ["mode", "run_id", "proposals"],
       "additionalProperties": false,
@@ -225,7 +225,7 @@
       }
     },
     {
-      "title": "bis bootstrap error",
+      "title": "bis init error",
       "description": "Returned when the CLI cannot proceed.",
       "type": "object",
       "required": ["mode", "error"],

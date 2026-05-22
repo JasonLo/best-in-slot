@@ -1,7 +1,7 @@
-"""Contract test: `bis bootstrap confirm --json` output for each action (T012).
+"""Contract test: `bis init confirm --json` output for each action (T012).
 
 Each action (accept / change / skip / defer) must produce a payload that
-validates against the `bis bootstrap confirm` branch of
+validates against the `bis init confirm` branch of
 `specs/001-bootstrap-discovery/contracts/bootstrap.schema.json`.
 """
 
@@ -67,7 +67,7 @@ def patched_pipeline(monkeypatch, tmp_slots_root, tmp_cache_root):
 
 def _invoke_confirm(*extra: str) -> dict:
     runner = CliRunner()
-    result = runner.invoke(cli_mod.app, ["bootstrap", "confirm", *extra, "--json"])
+    result = runner.invoke(cli_mod.app, ["init", "confirm", *extra, "--json"])
     assert result.exit_code == 0, result.stderr or result.stdout
     return json.loads(result.stdout)
 

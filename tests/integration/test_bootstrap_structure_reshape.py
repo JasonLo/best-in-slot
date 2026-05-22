@@ -81,7 +81,7 @@ def patched_pipeline(monkeypatch, tmp_slots_root, tmp_cache_root):
 
 def _confirm(*extra: str) -> dict:
     runner = CliRunner()
-    result = runner.invoke(cli_mod.app, ["bootstrap", "confirm", *extra, "--json"])
+    result = runner.invoke(cli_mod.app, ["init", "confirm", *extra, "--json"])
     assert result.exit_code == 0, result.stderr or result.stdout
     return json.loads(result.stdout)
 
@@ -153,7 +153,7 @@ def test_merge_incompatible_types_errors_clearly(patched_pipeline):
     result = runner.invoke(
         cli_mod.app,
         [
-            "bootstrap",
+            "init",
             "confirm",
             "--category",
             "python-validation",

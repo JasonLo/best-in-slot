@@ -8,7 +8,7 @@ Compose à la carte — recipes near the bottom show common combinations.
 
 ```bash
 uv sync                         # install pinned deps
-uv run bis bootstrap            # interactive walk-through: mine GH repos → propose slots → confirm → /deep-dive
+uv run bis init            # interactive walk-through: mine GH repos → propose slots → confirm → /deep-dive
 ```
 
 In Claude Code, the same flow is available conversationally via `/bis-bootstrap`. See `specs/001-bootstrap-discovery/quickstart.md` for the full first-run guide (existing-state handling, abort/resume, privacy verification, troubleshooting). The bootstrap also lets you **reshape the slot structure conversationally** — split a lumped slot into N sub-slots, merge two redundant slots, rename, drop, or add a custom slot — without touching `bis/categories.py`. See the *Reshaping the slot structure* section of the quickstart.

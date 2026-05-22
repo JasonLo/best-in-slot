@@ -78,11 +78,11 @@ Decisions land in the heuristic table over time, so cost trends to zero as the t
 
 **Decision**: Three CLI surfaces, picked by flag:
 
-1. **`bis bootstrap --interactive`** (default) — synchronous TTY prompts. Used when running directly in a terminal.
-2. **`bis bootstrap --json --batch`** — emits the full proposal set as a single JSON document; no prompts. Used by the skill to fetch the structured proposal, then drive the conversation in chat.
-3. **`bis bootstrap confirm --category X --action accept|change|skip|defer [--pick name]`** — applies one decision; emits the resulting `SlotDecision` as JSON. Used by both surfaces to apply decisions.
+1. **`bis init --interactive`** (default) — synchronous TTY prompts. Used when running directly in a terminal.
+2. **`bis init --json --batch`** — emits the full proposal set as a single JSON document; no prompts. Used by the skill to fetch the structured proposal, then drive the conversation in chat.
+3. **`bis init confirm --category X --action accept|change|skip|defer [--pick name]`** — applies one decision; emits the resulting `SlotDecision` as JSON. Used by both surfaces to apply decisions.
 
-The bootstrap skill in `skills/bis-bootstrap/SKILL.md` works by: (a) calling `--json --batch` once to load proposals, (b) walking the user through them in the conversation, (c) calling `bis bootstrap confirm ...` per accepted/changed/skipped/deferred slot, (d) offering `/deep-dive` per confirmed slot.
+The bootstrap skill in `skills/bis-bootstrap/SKILL.md` works by: (a) calling `--json --batch` once to load proposals, (b) walking the user through them in the conversation, (c) calling `bis init confirm ...` per accepted/changed/skipped/deferred slot, (d) offering `/deep-dive` per confirmed slot.
 
 **Rationale**: Constitution Principle III ("Skills wrap the CLI") — the CLI carries the structured contract; the skill is a thin conversational driver. Other agents (CI, scripts) can use `--json --batch` + `confirm` without ever invoking the skill.
 
@@ -138,7 +138,7 @@ Constructed only via `bis/privacy.py:to_safe_payload(profile_snapshot)`. Unit te
 
 ## R-8. Existing-state detection (FR-007)
 
-**Decision**: At the start of every `bis bootstrap` run, `bis/bootstrap.py:detect_existing_state()` checks for any non-hidden `*.yaml` under `slots/`. If found, the run pauses and requires:
+**Decision**: At the start of every `bis init` run, `bis/bootstrap.py:detect_existing_state()` checks for any non-hidden `*.yaml` under `slots/`. If found, the run pauses and requires:
 - In `--interactive` mode: a prompt asking `merge / replace / skip`.
 - In `--json --batch` mode: the request must include `--on-existing={merge|replace|skip}` or it returns an error JSON document.
 
@@ -152,7 +152,7 @@ Constructed only via `bis/privacy.py:to_safe_payload(profile_snapshot)`. Unit te
 
 ## R-9. Resume of deferred slots (FR-012, SC-007)
 
-**Decision**: `slots/.bootstrap.yaml` carries a `deferred_categories: list[str]` field. At the start of the next `bis bootstrap` walk-through, those categories are pulled to the *top* of the queue (regardless of category-type grouping) so the user sees their unfinished business first. Once decided, the category is removed from `deferred_categories`. The file also tracks `skipped_sources` (FR-008) and `run_id` for telemetry.
+**Decision**: `slots/.bootstrap.yaml` carries a `deferred_categories: list[str]` field. At the start of the next `bis init` walk-through, those categories are pulled to the *top* of the queue (regardless of category-type grouping) so the user sees their unfinished business first. Once decided, the category is removed from `deferred_categories`. The file also tracks `skipped_sources` (FR-008) and `run_id` for telemetry.
 
 **Rationale**: Q3's clarification + SC-007 — deferred slots resurface on next run, no cooldown. Putting them at the top (overriding the language → framework → tooling grouping for these specific slots) signals "you owe these answers" rather than burying them in the normal sequence.
 
@@ -203,7 +203,7 @@ The Phase 0 research closes both items the requirements checklist flagged:
 |---|---|---|
 | I — Python does data, Claude does judgment | PASS | Heuristic table is data; LLM only invoked with SafePayload on unknowns. |
 | II — YAML is source of truth | PASS | All persistence is YAML files. |
-| III — Skills wrap CLI | PASS | Skill calls `bis bootstrap --json --batch` + `bis bootstrap confirm`; CLI does not know about skills. |
+| III — Skills wrap CLI | PASS | Skill calls `bis init --json --batch` + `bis init confirm`; CLI does not know about skills. |
 | IV — Modern toolchain | PASS | uv, Typer, Pydantic v2, httpx (reserved for future). |
 | V — `gh` for GitHub | PASS | `bis/github.py` is the sole `gh` caller; no SDK; no token read. |
 

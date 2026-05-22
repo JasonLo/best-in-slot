@@ -1,4 +1,4 @@
-"""Contract test: `bis bootstrap --json --batch` output matches the JSON Schema (T011)."""
+"""Contract test: `bis init --json --batch` output matches the JSON Schema (T011)."""
 
 from __future__ import annotations
 
@@ -65,7 +65,7 @@ def patched_pipeline(monkeypatch, tmp_slots_root):
 
 def test_batch_output_matches_schema(schema, patched_pipeline, tmp_slots_root):
     runner = CliRunner()
-    result = runner.invoke(cli_mod.app, ["bootstrap", "--json", "--batch"])
+    result = runner.invoke(cli_mod.app, ["init", "--json", "--batch"])
     assert result.exit_code == 0, result.stderr
     payload = json.loads(result.stdout)
     assert payload["mode"] == "batch"
@@ -80,7 +80,7 @@ def test_existing_state_error_envelope_matches_schema(
         "category: python-web\ncategory_type: framework\npick: fastapi\nalternatives: []\nevidence: {repo_count: 1, most_recent: '2026-05-01T00:00:00+00:00', evidence_strength: 1.0, contributing_repos: []}\ndecided_at: '2026-05-01T00:00:00+00:00'\nhistory: []\n"
     )
     runner = CliRunner()
-    result = runner.invoke(cli_mod.app, ["bootstrap", "--json", "--batch"])
+    result = runner.invoke(cli_mod.app, ["init", "--json", "--batch"])
     assert result.exit_code == 2
     payload = json.loads(result.stdout)
     assert payload["mode"] == "error"

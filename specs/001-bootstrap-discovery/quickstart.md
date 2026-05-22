@@ -13,7 +13,7 @@
 
 ```bash
 uv sync                            # install pinned deps
-uv run bis bootstrap               # interactive walk-through
+uv run bis init               # interactive walk-through
 ```
 
 What you'll see:
@@ -42,7 +42,7 @@ In Claude Code:
 /bis-bootstrap
 ```
 
-Same flow, but the walk-through happens in conversation. The skill calls `bis bootstrap --json --batch` once to get the proposals, then walks you through them. Deep-dive prompts use the existing `/deep-dive` skill seamlessly.
+Same flow, but the walk-through happens in conversation. The skill calls `bis init --json --batch` once to get the proposals, then walks you through them. Deep-dive prompts use the existing `/deep-dive` skill seamlessly.
 
 ---
 
@@ -50,7 +50,7 @@ Same flow, but the walk-through happens in conversation. The skill calls `bis bo
 
 Press Ctrl-C at any prompt. Already-confirmed slots are persisted; undecided slots become `deferred` in `slots/.bootstrap.yaml`. Structural edits (US4 — see below) are also persisted as `taxonomy_edits` and **replayed** against the freshly-mined proposal set on the next run.
 
-Re-run `uv run bis bootstrap` later — deferred slots appear at the **top** of the walk-through (R-9 / R-11), in the order they were deferred. Once decided, they leave the deferred list.
+Re-run `uv run bis init` later — deferred slots appear at the **top** of the walk-through (R-9 / R-11), in the order they were deferred. Once decided, they leave the deferred list.
 
 ---
 
@@ -61,31 +61,31 @@ Sometimes the proposed taxonomy itself is wrong — not the pick within a slot, 
 ### Pre-walk taxonomy review
 
 ```bash
-uv run bis bootstrap taxonomy-review --json
+uv run bis init taxonomy-review --json
 ```
 
 Returns the full proposal list with `members` (proposed_pick + alternatives) and `suggest_split_into` per proposal. The skill renders this as a `[looks good / reshape]` prompt.
 
 ### Five structural actions
 
-Each runs through `bis bootstrap confirm` with a structure-aware action:
+Each runs through `bis init confirm` with a structure-aware action:
 
 ```bash
 # Split one slot into N sub-slots — system suggests a partition, OR pass --into
-uv run bis bootstrap confirm --category python-tooling --action split --json
-uv run bis bootstrap confirm --category my-mixed --action split --into a,b,c --json
+uv run bis init confirm --category python-tooling --action split --json
+uv run bis init confirm --category my-mixed --action split --into a,b,c --json
 
 # Merge one slot into another (must share category_type — see FR-019)
-uv run bis bootstrap confirm --category type-checker --action merge --with linter-formatter --json
+uv run bis init confirm --category type-checker --action merge --with linter-formatter --json
 
 # Rename a slot label without changing membership
-uv run bis bootstrap confirm --category databases --action rename --to-name datastore --json
+uv run bis init confirm --category databases --action rename --to-name datastore --json
 
 # Drop a slot from the proposal set entirely (distinct from skip)
-uv run bis bootstrap confirm --category python-terminal --action drop --json
+uv run bis init confirm --category python-terminal --action drop --json
 
 # Add a slot the bootstrap didn't propose
-uv run bis bootstrap confirm --category infra --action add --pick terraform --new-type tooling --json
+uv run bis init confirm --category infra --action add --pick terraform --new-type tooling --json
 ```
 
 Each successful structure action is recorded in `slots/.bootstrap.yaml`'s `taxonomy_edits` array (append-only). On the next bootstrap run, those edits are **replayed** against the freshly-mined proposal set — you don't have to redo the reshape after a fresh pull or 24h cache expiry.
@@ -95,7 +95,7 @@ Each successful structure action is recorded in `slots/.bootstrap.yaml`'s `taxon
 If you want to revisit only the taxonomy (no fresh mining), use the dedicated subcommand:
 
 ```bash
-uv run bis bootstrap restructure --json
+uv run bis init restructure --json
 ```
 
 This re-emits the taxonomy review against the cached proposal set. Errors with `no_prior_proposal` if you've never run a bootstrap on this directory.
@@ -104,10 +104,10 @@ This re-emits the taxonomy review against the cached proposal set. Errors with `
 
 | Code | Meaning | Fix |
 | --- | --- | --- |
-| `unknown_category` | Merge / rename / drop target doesn't exist in the current proposal set | Run `bis bootstrap --json --batch` to see available categories. |
+| `unknown_category` | Merge / rename / drop target doesn't exist in the current proposal set | Run `bis init --json --batch` to see available categories. |
 | `split_not_supported` | The heuristic table can't partition this slot's members, and no `--into` was given | Pass `--into name1,name2,...` to supply your own partition. |
 | `merge_incompatible_types` | The two slots have different `category_type` (e.g., framework vs tooling) — merge would conflate roles | Rename one first, or pick a target with the same type. |
-| `no_prior_proposal` | `bis bootstrap restructure` invoked but no `slots/.bootstrap.yaml` exists | Run `bis bootstrap` first to mine a proposal set. |
+| `no_prior_proposal` | `bis init restructure` invoked but no `slots/.bootstrap.yaml` exists | Run `bis init` first to mine a proposal set. |
 
 ---
 
@@ -126,9 +126,9 @@ uv run bis status                            # tabular view of all picks (added 
 
 Run again any time. The cache means it's cheap. Common scenarios:
 
-- **"I want to revisit my deferred slots"** → just run `uv run bis bootstrap`; deferred slots are at the top.
-- **"I want a fresh look at everything"** → `uv run bis bootstrap --on-existing=replace` (interactive) or pass `--on-existing` in batch mode. Old slot YAMLs are replaced; their history is preserved within the new file via a `bootstrap-replace` history entry.
-- **"My package registry choices changed; I want to merge"** → `uv run bis bootstrap --on-existing=merge` keeps existing picks where the bootstrap proposes the same value and prompts for the rest.
+- **"I want to revisit my deferred slots"** → just run `uv run bis init`; deferred slots are at the top.
+- **"I want a fresh look at everything"** → `uv run bis init --on-existing=replace` (interactive) or pass `--on-existing` in batch mode. Old slot YAMLs are replaced; their history is preserved within the new file via a `bootstrap-replace` history entry.
+- **"My package registry choices changed; I want to merge"** → `uv run bis init --on-existing=merge` keeps existing picks where the bootstrap proposes the same value and prompts for the rest.
 
 ---
 
@@ -143,7 +143,7 @@ This test asserts that the JSON serialisation of any `SafePayload` contains no m
 If you want to hand-verify a single run:
 
 ```bash
-uv run bis bootstrap --dry-run --print-llm-payloads | jq .
+uv run bis init --dry-run --print-llm-payloads | jq .
 ```
 
 `--dry-run` does mining + proposal but writes nothing; `--print-llm-payloads` dumps every `SafePayload` that *would* have been sent to the LLM during this run.

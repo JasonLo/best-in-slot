@@ -65,7 +65,7 @@ def test_first_run_persists_taxonomy_edits(patched_pipeline, tmp_slots_root):
     runner.invoke(
         cli_mod.app,
         [
-            "bootstrap",
+            "init",
             "confirm",
             "--category",
             "databases",
@@ -78,7 +78,7 @@ def test_first_run_persists_taxonomy_edits(patched_pipeline, tmp_slots_root):
     )
     runner.invoke(
         cli_mod.app,
-        ["bootstrap", "confirm", "--category", "python-terminal", "--action", "drop", "--json"],
+        ["init", "confirm", "--category", "python-terminal", "--action", "drop", "--json"],
     )
 
     state = yaml.safe_load((tmp_slots_root / ".bootstrap.yaml").read_text())
@@ -95,7 +95,7 @@ def test_replay_against_fresh_proposals_drops_renames(patched_pipeline):
     runner.invoke(
         cli_mod.app,
         [
-            "bootstrap",
+            "init",
             "confirm",
             "--category",
             "databases",

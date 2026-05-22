@@ -52,12 +52,12 @@ app = typer.Typer(
     add_completion=False,
 )
 
-bootstrap_app = typer.Typer(
-    name="bootstrap",
-    help="Bootstrap a slot structure from your GitHub repo history.",
+init_app = typer.Typer(
+    name="init",
+    help="Initialize a slot structure from your GitHub repo history (bootstrap discovery).",
     no_args_is_help=False,
 )
-app.add_typer(bootstrap_app)
+app.add_typer(init_app)
 
 
 # --------------------------------------------------------------------------- helpers
@@ -87,8 +87,8 @@ def _proposal_to_dict(p: CategoryProposal) -> dict:
 # --------------------------------------------------------------------------- bootstrap (interactive default)
 
 
-@bootstrap_app.callback(invoke_without_command=True)
-def bootstrap_root(
+@init_app.callback(invoke_without_command=True)
+def init_root(
     ctx: typer.Context,
     json_mode: Annotated[
         bool, typer.Option("--json", help="Emit JSON-only output (machine-readable).")
@@ -241,8 +241,8 @@ def _interactive_walkthrough(
 # --------------------------------------------------------------------------- confirm subcommand
 
 
-@bootstrap_app.command("pending-dives")
-def bootstrap_pending_dives(
+@init_app.command("pending-dives")
+def init_pending_dives(
     json_mode: Annotated[bool, typer.Option("--json", help="Emit JSON output.")] = True,
 ) -> None:
     """List confirmed slots that have not yet received a /deep-dive enrichment.
@@ -274,8 +274,8 @@ _PICK_ACTIONS = {"accept", "change", "skip", "defer"}
 _STRUCTURE_ACTIONS = {"split", "merge", "rename", "drop", "add"}
 
 
-@bootstrap_app.command("confirm")
-def bootstrap_confirm(
+@init_app.command("confirm")
+def init_confirm(
     category: Annotated[str, typer.Option("--category", help="Slot category.")],
     action: Annotated[
         str,
@@ -414,7 +414,7 @@ def _handle_structure_action(
             _emit_error(
                 "unknown_category",
                 f"no proposal found for category={category!r}",
-                hint="run `bis bootstrap --json --batch` to see available categories",
+                hint="run `bis init --json --batch` to see available categories",
             )
 
     # Build the StructureChange.
@@ -453,7 +453,7 @@ def _handle_structure_action(
             _emit_error(
                 "unknown_category",
                 f"merge target category={merge_with!r} not found",
-                hint="pick a category from `bis bootstrap --json --batch`",
+                hint="pick a category from `bis init --json --batch`",
             )
         if proposal is not None and proposal.category_type != target.category_type:
             _emit_error(
@@ -522,8 +522,8 @@ def _handle_structure_action(
 # --------------------------------------------------------------------------- taxonomy-review subcommand
 
 
-@bootstrap_app.command("taxonomy-review")
-def bootstrap_taxonomy_review(
+@init_app.command("taxonomy-review")
+def init_taxonomy_review(
     json_mode: Annotated[bool, typer.Option("--json", help="Emit JSON output.")] = True,
 ) -> None:
     """Pre-walk overview of proposals with per-proposal split suggestions.
@@ -568,8 +568,8 @@ def bootstrap_taxonomy_review(
 # --------------------------------------------------------------------------- restructure subcommand
 
 
-@bootstrap_app.command("restructure")
-def bootstrap_restructure(
+@init_app.command("restructure")
+def init_restructure(
     json_mode: Annotated[bool, typer.Option("--json", help="Emit JSON output.")] = True,
 ) -> None:
     """Enter taxonomy-edit mode against the cached proposal set (no re-mining).
@@ -585,12 +585,12 @@ def bootstrap_restructure(
         _emit_error(
             "no_prior_proposal",
             "no prior bootstrap run found",
-            hint="run `bis bootstrap` first to mine a proposal set",
+            hint="run `bis init` first to mine a proposal set",
         )
 
     # Re-emit the taxonomy review; the user can chain `confirm --action ...`
     # against the result.
-    bootstrap_taxonomy_review(json_mode=json_mode)
+    init_taxonomy_review(json_mode=json_mode)
 
 
 # --------------------------------------------------------------------------- placeholder subcommands referenced by quickstart

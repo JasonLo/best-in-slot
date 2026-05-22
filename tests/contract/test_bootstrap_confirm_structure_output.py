@@ -1,7 +1,7 @@
-"""Contract test: `bis bootstrap confirm --action {split|merge|rename|drop|add}` (T053).
+"""Contract test: `bis init confirm --action {split|merge|rename|drop|add}` (T053).
 
 Each structure action must produce a payload that validates against the
-extended `bis bootstrap confirm` branch of bootstrap.schema.json, including
+extended `bis init confirm` branch of bootstrap.schema.json, including
 the per-action aux fields (`into`, `merge_with`, `new_name`, `new_category_type`).
 """
 
@@ -63,7 +63,7 @@ def patched_pipeline(monkeypatch, tmp_slots_root, tmp_cache_root):
 
 def _invoke_confirm(*extra: str) -> dict:
     runner = CliRunner()
-    result = runner.invoke(cli_mod.app, ["bootstrap", "confirm", *extra, "--json"])
+    result = runner.invoke(cli_mod.app, ["init", "confirm", *extra, "--json"])
     assert result.exit_code == 0, result.stderr or result.stdout
     return json.loads(result.stdout)
 
@@ -94,7 +94,7 @@ def test_confirm_split_without_heuristic_errors_clearly(schema, patched_pipeline
     runner = CliRunner()
     result = runner.invoke(
         cli_mod.app,
-        ["bootstrap", "confirm", "--category", "package-manager", "--action", "split", "--json"],
+        ["init", "confirm", "--category", "package-manager", "--action", "split", "--json"],
     )
     assert result.exit_code == 2
     payload = json.loads(result.stdout)

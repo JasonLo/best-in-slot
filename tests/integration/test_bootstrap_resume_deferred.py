@@ -81,7 +81,7 @@ def _seed_deferred(slots_root, categories: list[str]) -> None:
 def test_deferred_categories_resurface_at_top(patched_pipeline, tmp_slots_root):
     _seed_deferred(tmp_slots_root, ["test-runner"])
     runner = CliRunner()
-    result = runner.invoke(cli_mod.app, ["bootstrap", "--json", "--batch"])
+    result = runner.invoke(cli_mod.app, ["init", "--json", "--batch"])
     assert result.exit_code == 0, result.stderr or result.stdout
     payload = json.loads(result.stdout)
     assert "test-runner" in payload["deferred_categories_resurfaced"]
@@ -95,7 +95,7 @@ def test_deferral_state_round_trips_through_run_state(patched_pipeline, tmp_slot
 
     _seed_deferred(tmp_slots_root, ["test-runner"])
     runner = CliRunner()
-    runner.invoke(cli_mod.app, ["bootstrap", "--json", "--batch"])
+    runner.invoke(cli_mod.app, ["init", "--json", "--batch"])
     after = yaml.safe_load((tmp_slots_root / ".bootstrap.yaml").read_text())
     # The new run inherits the prior deferred list (it has not been resolved).
     assert "test-runner" in after["deferred_categories"]
@@ -103,7 +103,7 @@ def test_deferral_state_round_trips_through_run_state(patched_pipeline, tmp_slot
 
 def test_no_deferral_falls_through_to_default_ordering(patched_pipeline):
     runner = CliRunner()
-    result = runner.invoke(cli_mod.app, ["bootstrap", "--json", "--batch"])
+    result = runner.invoke(cli_mod.app, ["init", "--json", "--batch"])
     payload = json.loads(result.stdout)
     assert payload["deferred_categories_resurfaced"] == []
     types = [p["category_type"] for p in payload["proposals"]]

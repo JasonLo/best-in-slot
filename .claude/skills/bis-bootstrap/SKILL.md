@@ -5,7 +5,7 @@ description: Bootstrap a best-in-slot tech inventory from the user's last 3 year
 
 # bis-bootstrap
 
-Conversational driver over the `bis bootstrap` CLI. The CLI does the data work
+Conversational driver over the `bis init` CLI. The CLI does the data work
 (scan repos, parse manifests, propose categories, write YAML); this skill does
 the judgment work (frame the proposal, ask the user, chain into `/deep-dive`).
 Per project constitution: data in Python, judgment in skills, no duplication.
@@ -34,7 +34,7 @@ Run these in parallel. If any fails, surface the gap and stop:
 ### Step 1 — Detect existing state
 
 ```bash
-uv run bis bootstrap --json --batch
+uv run bis init --json --batch
 ```
 
 Possible outcomes:
@@ -59,7 +59,7 @@ commit `3bc2482`), two categories might be redundant, a label might be off,
 or the user might want a slot the bootstrap didn't propose.
 
 ```bash
-uv run bis bootstrap taxonomy-review --json
+uv run bis init taxonomy-review --json
 ```
 
 Render the result as a compact overview:
@@ -76,7 +76,7 @@ Does this taxonomy look right? [looks good / let's reshape]
 If the user picks **looks good**, skip to Step 2b.
 
 If the user picks **let's reshape**, enter a sub-loop offering five
-structural actions. Each one maps to a `bis bootstrap confirm` call:
+structural actions. Each one maps to a `bis init confirm` call:
 
 | Action  | What it does                                          | CLI call                                                                              |
 | ------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------- |
@@ -127,7 +127,7 @@ rebuilt taxonomy, re-ordered per FR-014. The user can also at any pause type
 When the user picks a pick action, apply it:
 
 ```bash
-uv run bis bootstrap confirm --category <cat> --action <accept|change|skip|defer> [--pick <name>] --json --on-existing <choice>
+uv run bis init confirm --category <cat> --action <accept|change|skip|defer> [--pick <name>] --json --on-existing <choice>
 ```
 
 ### Step 3 — Offer /deep-dive per confirmed slot
@@ -157,7 +157,7 @@ When the walk-through ends, summarise:
   `slots/.bootstrap.yaml`
 - Deep-dive failures (if any)
 - Skipped sources (from the batch payload's `skipped_sources`)
-- Pointer: `uv run bis bootstrap pending-dives --json` lists slots that still
+- Pointer: `uv run bis init pending-dives --json` lists slots that still
   need a `/deep-dive` later
 
 Example summary:
@@ -167,7 +167,7 @@ Walk-through complete.
   Picks: 8 accepted, 3 changed, 1 skipped, 0 deferred
   Structure: 1 split, 0 merge, 1 rename, 1 drop, 1 add (terraform → infra)
   Skipped sources: 1 (org:secret-corp — access denied)
-  /deep-dive: 0 failures, 4 slots still pending (run `bis bootstrap pending-dives --json` to see them)
+  /deep-dive: 0 failures, 4 slots still pending (run `bis init pending-dives --json` to see them)
 ```
 
 ## Privacy posture
@@ -179,7 +179,7 @@ raw manifest content, README bodies, or repo identities beyond the package
 layer in any LLM-bound message.
 
 If the user asks "what would the LLM see?", point them at
-`uv run bis bootstrap --dry-run --print-llm-payloads`.
+`uv run bis init --dry-run --print-llm-payloads`.
 
 ## What this skill MUST NOT do
 

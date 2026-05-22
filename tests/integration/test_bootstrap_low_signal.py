@@ -35,7 +35,7 @@ def test_no_repos_in_window_emits_error_envelope(
     monkeypatch.setattr(cli_mod, "mine_profile", lambda settings, **kw: _profile(signals=[]))
     monkeypatch.setattr(bootstrap_mod, "check_auth", lambda: None)
 
-    result = runner.invoke(cli_mod.app, ["bootstrap", "--json", "--batch"])
+    result = runner.invoke(cli_mod.app, ["init", "--json", "--batch"])
     assert result.exit_code == 2
     payload = json.loads(result.stdout)
     assert payload["mode"] == "error"
@@ -63,7 +63,7 @@ def test_single_repo_proposal_carries_low_confidence(
     monkeypatch.setattr(cli_mod, "mine_profile", lambda settings, **kw: _profile([sig]))
     monkeypatch.setattr(bootstrap_mod, "check_auth", lambda: None)
 
-    result = runner.invoke(cli_mod.app, ["bootstrap", "--json", "--batch"])
+    result = runner.invoke(cli_mod.app, ["init", "--json", "--batch"])
     assert result.exit_code == 0, result.stderr
     payload = json.loads(result.stdout)
     [p] = payload["proposals"]
@@ -83,7 +83,7 @@ def test_gh_auth_missing_emits_error_envelope(monkeypatch, tmp_slots_root, tmp_c
     monkeypatch.setattr(cli_mod, "mine_profile", lambda settings, **kw: profile)
     monkeypatch.setattr(bootstrap_mod, "check_auth", lambda: None)
 
-    result = runner.invoke(cli_mod.app, ["bootstrap", "--json", "--batch"])
+    result = runner.invoke(cli_mod.app, ["init", "--json", "--batch"])
     assert result.exit_code == 2
     payload = json.loads(result.stdout)
     assert payload["error"]["code"] == "gh_auth_missing"

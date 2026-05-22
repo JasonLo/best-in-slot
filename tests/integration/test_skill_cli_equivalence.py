@@ -1,8 +1,8 @@
 """Integration test: skill-driven flow ≡ CLI flow for the same decisions (T038).
 
 The bootstrap skill drives the CLI via two calls per decision:
-  1. `uv run bis bootstrap --json --batch [--on-existing=<choice>]` (once)
-  2. `uv run bis bootstrap confirm --category X --action Y [--pick Z] --json` (per slot)
+  1. `uv run bis init --json --batch [--on-existing=<choice>]` (once)
+  2. `uv run bis init confirm --category X --action Y [--pick Z] --json` (per slot)
 
 A user driving the CLI directly in interactive mode applies the same set of
 decisions through the prompt loop. The resulting slot YAML files must be
@@ -95,14 +95,14 @@ def test_skill_flow_produces_same_slot_state_as_direct_confirm(patched_pipeline,
     runner = CliRunner()
 
     # --- skill-shaped flow: batch then per-decision confirm.
-    batch_result = runner.invoke(cli_mod.app, ["bootstrap", "--json", "--batch"])
+    batch_result = runner.invoke(cli_mod.app, ["init", "--json", "--batch"])
     assert batch_result.exit_code == 0, batch_result.stderr or batch_result.stdout
     batch = json.loads(batch_result.stdout)
     for proposal in batch["proposals"]:
         confirm_result = runner.invoke(
             cli_mod.app,
             [
-                "bootstrap",
+                "init",
                 "confirm",
                 "--category",
                 proposal["category"],
@@ -137,20 +137,20 @@ def test_skill_flow_resilience_against_skip_decisions(patched_pipeline, tmp_slot
 
     runner = CliRunner()
 
-    batch = json.loads(runner.invoke(cli_mod.app, ["bootstrap", "--json", "--batch"]).stdout)
+    batch = json.loads(runner.invoke(cli_mod.app, ["init", "--json", "--batch"]).stdout)
     [first, *rest] = batch["proposals"]
 
     # Skip the first proposal; accept the rest.
     skip = runner.invoke(
         cli_mod.app,
-        ["bootstrap", "confirm", "--category", first["category"], "--action", "skip", "--json"],
+        ["init", "confirm", "--category", first["category"], "--action", "skip", "--json"],
     )
     assert skip.exit_code == 0
     for proposal in rest:
         runner.invoke(
             cli_mod.app,
             [
-                "bootstrap",
+                "init",
                 "confirm",
                 "--category",
                 proposal["category"],

@@ -67,7 +67,7 @@ def test_failed_dive_keeps_slot_in_pending_list(tmp_slots_root, runner):
     # Slot C: dive failed differently — README exists but no `## Deep dive`.
     _seed_slot(tmp_slots_root, "test-runner", "pytest", readme_body="# pytest\n\nbody\n")
 
-    result = runner.invoke(cli_mod.app, ["bootstrap", "pending-dives", "--json"])
+    result = runner.invoke(cli_mod.app, ["init", "pending-dives", "--json"])
     assert result.exit_code == 0, result.stderr or result.stdout
     payload = json.loads(result.stdout)
     pending_categories = {p["category"] for p in payload["pending"]}
@@ -84,7 +84,7 @@ def test_pending_dives_does_not_abort_on_any_one_slot(tmp_slots_root, runner):
     _seed_slot(tmp_slots_root, "python-data", "pandas", readme_body=None)
     _seed_slot(tmp_slots_root, "test-runner", "pytest", readme_body=None)
 
-    result = runner.invoke(cli_mod.app, ["bootstrap", "pending-dives", "--json"])
+    result = runner.invoke(cli_mod.app, ["init", "pending-dives", "--json"])
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert len(payload["pending"]) == 3

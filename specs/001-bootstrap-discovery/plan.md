@@ -46,7 +46,7 @@ This plan also scaffolds the `bis` Python CLI itself: the current `bis/` directo
 |---|---|---|
 | **I. Python does data, Claude does judgment** | PASS | All scanning, parsing, aggregation, scoring, ordering, and YAML I/O lives in `bis/`. The conversational confirmation walk-through is driven by the skill layer (`skills/bis-bootstrap/SKILL.md`) — the CLI offers a `--json` and `--batch` mode the skill orchestrates. Category inference defaults to deterministic heuristics; LLM is consulted only on unknowns and only with the scrubbed `SafePayload`. |
 | **II. YAML is the source of truth** | PASS | Slot state: `slots/{category}.yaml`. Run state: `slots/.bootstrap.yaml`. Mining cache: `.bis/cache/repos/{owner}/{repo}.yaml`. No SQLite, no Postgres, no JSON-blob store. |
-| **III. Skills wrap the CLI** | PASS | `bis bootstrap` is a Typer subcommand. The bootstrap skill (User Story 3) shells out via `uv run bis bootstrap` and adds conversational framing — it does not re-parse manifests or hit `gh` directly. |
+| **III. Skills wrap the CLI** | PASS | `bis init` is a Typer subcommand. The bootstrap skill (User Story 3) shells out via `uv run bis init` and adds conversational framing — it does not re-parse manifests or hit `gh` directly. |
 | **IV. Modern Python toolchain** | PASS | uv-managed env, Typer for CLI, Pydantic v2 for every boundary model in `bis/models.py`, httpx for any HTTP (none in bootstrap itself; reserved for registry calls). |
 | **V. `gh` for GitHub** | PASS | All repo listing, manifest fetching, and org membership lookups go through `gh api ...` invoked from `bis/github.py`. No `GITHUB_TOKEN` read, no PyGithub. |
 
@@ -78,7 +78,7 @@ specs/001-bootstrap-discovery/
 ```text
 bis/                              # Python package — scaffolded by this feature
 ├── __init__.py
-├── cli.py                        # Typer app: `bis bootstrap`, `bis status`, …
+├── cli.py                        # Typer app: `bis init`, `bis status`, …
 ├── models.py                     # Pydantic v2: RepoRef, ToolSignal, CategoryProposal,
 │                                 #   SlotDecision, SlotState, BootstrapRunState, SafePayload
 ├── slots.py                      # YAML CRUD for slots/{category}.yaml + slots/.bootstrap.yaml
