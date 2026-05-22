@@ -1,0 +1,19 @@
+universe                = docker
+docker_image            = ghcr.io/jasonlo/my-cuda-proj:latest
+
+executable              = /bin/bash
+arguments               = -lc "pixi run train --epochs 10"
+
+output                  = logs/train.$(Cluster).$(Process).out
+error                   = logs/train.$(Cluster).$(Process).err
+log                     = logs/train.$(Cluster).log
+
+request_gpus            = 1
+request_cpus            = 4
+request_memory          = 16 GB
+request_disk            = 20 GB
+
+requirements            = (HAS_CHTC_GROUP =?= True)
++WantGPULab             = true
+
+queue 1
