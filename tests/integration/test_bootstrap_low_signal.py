@@ -27,7 +27,9 @@ def runner():
     return CliRunner()
 
 
-def test_no_repos_in_window_emits_error_envelope(monkeypatch, tmp_slots_root, tmp_cache_root, runner):
+def test_no_repos_in_window_emits_error_envelope(
+    monkeypatch, tmp_slots_root, tmp_cache_root, runner
+):
     """A user with no repos in the 3y window gets a clean error, not a crash."""
 
     monkeypatch.setattr(cli_mod, "mine_profile", lambda settings, **kw: _profile(signals=[]))
@@ -40,7 +42,9 @@ def test_no_repos_in_window_emits_error_envelope(monkeypatch, tmp_slots_root, tm
     assert payload["error"]["code"] == "no_repos_in_window"
 
 
-def test_single_repo_proposal_carries_low_confidence(monkeypatch, tmp_slots_root, tmp_cache_root, runner):
+def test_single_repo_proposal_carries_low_confidence(
+    monkeypatch, tmp_slots_root, tmp_cache_root, runner
+):
     """A category supported by < 3 repos surfaces with confidence_qualifier=low."""
 
     repo = RepoRef(
