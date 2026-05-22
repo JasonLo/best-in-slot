@@ -8,6 +8,16 @@
 
 **Input**: User description: "The discovery is a multistep process. 1. roughly obtain recently used tools in the past 3 years from user's gh repos (include orgs, or private, and public). Based on best guess, suggest a rought best-in-slot structure. 2. Ask user to confirm each slot 3. Refine each slot with /deep-dive skill. Nice to have is adding skill to do 1 and 2. I already have /deep-dive"
 
+## Clarifications
+
+### Session 2026-05-22
+
+- Q: When the user chooses "change" for a slot, what alternatives can they select? → A: Observed alternatives are the default surface, but free-form override is accepted (any package the user names).
+- Q: What private-repo data may cross a trust boundary (e.g., be sent to an LLM) during mining and category inference? → A: Package/manifest names, frequencies, and recency timestamps may be sent to the LLM; raw repo content (source files, README bodies, file contents) never leaves the machine.
+- Q: How does a deferred slot return to the user's attention? → A: Automatically resurfaces on the next bootstrap run; no timer or cooldown, just a flag.
+- Q: In what order are slot proposals presented during the walk-through? → A: Grouped by category type — languages first, then frameworks, then tooling — with evidence-strength (strongest first) as the tiebreaker within each group.
+- Q: If mining is interrupted (crash, abort) partway through, how is its work preserved? → A: Per-repo cache with a short TTL (~24h); retries within the window skip already-scanned repos, no first-class resumable-job state.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Propose a best-in-slot structure from my recent repo history (Priority: P1)
@@ -76,7 +86,7 @@ The mine-and-propose phase and the confirm phase (i.e. User Story 1) are accessi
 - **FR-001**: The system MUST scan the user's GitHub presence — public repositories, private repositories the user can access, and repositories in organizations the user is a member of — for repository activity within the trailing 3-year window.
 - **FR-002**: The system MUST parse each scanned repository for tool/dependency signals using whatever manifest formats are present, and aggregate the signals into a per-tool frequency and recency record.
 - **FR-003**: The system MUST translate the aggregated tool signals into a best-guess best-in-slot proposal containing, for each proposed slot: a category label, a proposed pick, the count of contributing repos, the most recent contributing date, and (when applicable) any plausible alternatives observed in the same data.
-- **FR-004**: The system MUST present the proposal to the user one slot at a time, with four available actions per slot: accept the pick, change the pick to a named alternative, skip the slot, or defer the decision.
+- **FR-004**: The system MUST present the proposal to the user one slot at a time, with four available actions per slot: accept the pick, change the pick to a named alternative, skip the slot, or defer the decision. When the user chooses "change", the system MUST default to surfacing the observed-in-history alternatives for that category as the suggested list, AND MUST also accept a free-form package name the user types — even one not present in their repo history.
 - **FR-005**: For each confirmed slot, the system MUST offer the user the option to run the existing `/deep-dive` skill against that slot, and on user assent, invoke it and persist the resulting deep-dive output alongside the slot.
 - **FR-006**: The system MUST persist all confirmed slots — and their deep-dive output where applicable — into the same project artifacts used by the rest of the project, so that other commands operate against them without further setup.
 - **FR-007**: When prior slot state already exists in the project, the system MUST detect it and require an explicit user choice between merge, replace, or skip before any state change.
@@ -84,7 +94,10 @@ The mine-and-propose phase and the confirm phase (i.e. User Story 1) are accessi
 - **FR-009**: The system MUST surface, alongside each proposed slot, the count of repos and the most recent contributing date that produced the proposal, so the user can judge signal strength before deciding.
 - **FR-010**: The mine-and-propose phase and the per-slot confirmation walk-through MUST be invokable both from the existing CLI and from a Claude skill entry point. The skill entry point is in scope but lower priority (see User Story 3).
 - **FR-011**: A deep-dive failure on any single slot MUST NOT halt the rest of the walk-through; the failure MUST be reported in the run's final summary.
-- **FR-012**: When the user aborts the walk-through, already-confirmed slots MUST be persisted; undecided slots MUST be retained in a deferred state for a future run, not silently discarded.
+- **FR-012**: When the user aborts the walk-through, already-confirmed slots MUST be persisted; undecided slots MUST be retained in a deferred state for a future run, not silently discarded. On the next invocation of the bootstrap, deferred slots MUST automatically be re-presented to the user in the walk-through — no cooldown, no separate command required to revisit them.
+- **FR-013**: Data crossing a trust boundary (e.g., sent to an LLM) during mining or category inference MUST be limited to package/manifest names, aggregated frequencies, and recency timestamps. Raw repository content — source files, README bodies, manifest excerpts beyond the parsed name list — MUST NOT leave the user's machine as part of this feature.
+- **FR-014**: The walk-through MUST present slot proposals grouped by category type in the order: languages → frameworks → tooling. Within each group, proposals MUST be ordered by evidence-strength (strongest first), so the ordering is deterministic given the same input data.
+- **FR-015**: The mining phase MUST cache per-repo scan results locally with a TTL of approximately 24 hours. On a re-run within the TTL, already-scanned repos MUST be skipped (their cached signals reused) so a crash or abort during mining does not force a full re-scan. The system is not required to support first-class job checkpoints or indefinite-gap resumption.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -104,11 +117,14 @@ The mine-and-propose phase and the confirm phase (i.e. User Story 1) are accessi
 - **SC-005**: A user re-running the bootstrap on a project that already has slots is presented with an explicit merge/replace/skip choice before any state change, 100% of the time — existing data is never overwritten silently.
 - **SC-006**: Total wall-clock time the user spends *waiting* on system mining/processing during the run — i.e. with no input requested from them — is under 5 minutes for a user with ≤50 repos in the 3-year window.
 - **SC-007**: A user who aborts the walk-through partway through can resume in a later session and finds every already-confirmed slot persisted and every undecided slot still pending — zero confirmed work is lost.
+- **SC-008**: A security-conscious user can run the bootstrap on a project containing private repos and confirm — by inspecting whatever the tool would send externally — that no raw repository content is included, 100% of the time.
+- **SC-009**: A user who restarts the bootstrap within 24 hours of a prior aborted run completes the mining phase in under 25% of the wall-clock time the first run took (i.e., the cache makes restarts substantively cheaper, not just incrementally so).
 
 ## Assumptions
 
 - The user has a GitHub account and authenticated CLI access (e.g., a working `gh` session); the system relies on the existing auth surface rather than introducing its own credential flow.
 - "Best-in-slot" categories are not pre-fixed: the proposal phase may infer categories from the data, draw from configured categories, or both — the spec does not constrain how the inference works, only what the user sees and can act on.
+- Each inferred category carries a category-type tag of `language`, `framework`, or `tooling`, used by FR-014 to drive walk-through ordering. The exact taxonomy mapping (which packages count as which type) is an implementation decision for `/speckit-plan`; only the three-tier grouping is fixed here.
 - The trailing-window length is fixed at 3 years per the user's description. A future iteration may make it configurable; this iteration treats it as a constant.
 - The existing `/deep-dive` skill is treated as a black box: it accepts a slot and produces enrichment content; this spec does not redefine its behavior.
 - The bootstrap is interactive by design — there is no fully automated, no-confirmation mode in this iteration. Every slot crosses the user's eyes before it lands.
