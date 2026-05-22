@@ -66,7 +66,7 @@ These hold across every Python slot unless the slot's README says otherwise:
 | [ml-framework](slots/python-ai/pytorch/) | **pytorch** | Train or fine-tune models |
 | [model-zoo](slots/python-ai/transformers/) | **transformers** | Use pretrained HF models |
 | [llm-sdk](slots/python-ai/anthropic-sdk/) | **anthropic** | Call Claude (OpenAI noted as alt) |
-| [mcp-server](slots/python-ai/mcp/) | **mcp** | Expose tools to Claude Code / hosts |
+| [mcp-server](slots/python-ai/fastmcp/) | **fastmcp** | Expose tools to Claude Code / hosts |
 
 ### databases
 
@@ -120,4 +120,4 @@ These hold across every Python slot unless the slot's README says otherwise:
 | Static site | astro |
 | Tiny TS HTTP service | bun, hono, markdown-it |
 | Claude Code plugin | skill-md |
-| MCP server | uv, mcp, pydantic, anthropic-sdk |
+| MCP server | uv, fastmcp, pydantic, anthropic-sdk |

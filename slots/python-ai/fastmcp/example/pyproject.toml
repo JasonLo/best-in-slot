@@ -1,14 +1,17 @@
 [project]
-name = "mcp-example"
+name = "fastmcp-example"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["mcp>=1.0"]
+dependencies = ["fastmcp>=3"]
 
 [project.scripts]
-mcp-example = "mcp_example.server:main"
+fastmcp-example = "fastmcp_example.server:main"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "pytest-asyncio>=0.24"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
 
 [build-system]
 requires = ["uv_build>=0.10"]

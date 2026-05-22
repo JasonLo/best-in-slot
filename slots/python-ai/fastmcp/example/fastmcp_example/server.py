@@ -1,17 +1,17 @@
-"""Minimal MCP server exposing two tools and one resource."""
+"""Minimal FastMCP server exposing two tools and one resource."""
 
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 
-mcp = FastMCP("mcp-example")
+mcp = FastMCP("fastmcp-example")
 
 
-@mcp.tool()
+@mcp.tool
 def echo(message: str) -> str:
     """Return the message unchanged."""
     return message
 
 
-@mcp.tool()
+@mcp.tool
 def add(a: int, b: int) -> int:
     """Add two integers and return the sum."""
     return a + b
