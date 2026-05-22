@@ -1,0 +1,19 @@
+category: linter-formatter
+category_type: tooling
+pick: ruff
+alternatives:
+- isort
+- black
+- autopep8
+evidence:
+  repo_count: 4
+  most_recent: '2026-05-22T00:24:48Z'
+  evidence_strength: 16.273601565280664
+  contributing_repos: []
+decided_at: '2026-05-22T15:53:30.852420Z'
+history:
+- action: bootstrap-accept
+  from_pick: null
+  to_pick: ruff
+  reason: 'bootstrap: accepted proposed pick'
+  date: '2026-05-22T15:53:30.852420Z'

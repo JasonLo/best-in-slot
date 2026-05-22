@@ -1,0 +1,17 @@
+category: notebook-kernel
+category_type: tooling
+pick: ipykernel
+alternatives:
+- jupyter-client
+evidence:
+  repo_count: 50
+  most_recent: '2026-05-21T19:18:22Z'
+  evidence_strength: 249.90507499546834
+  contributing_repos: []
+decided_at: '2026-05-22T15:53:30.852420Z'
+history:
+- action: bootstrap-accept
+  from_pick: null
+  to_pick: ipykernel
+  reason: 'bootstrap: accepted proposed pick'
+  date: '2026-05-22T15:53:30.852420Z'

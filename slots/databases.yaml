@@ -1,0 +1,21 @@
+category: databases
+category_type: framework
+pick: sqlmodel
+alternatives:
+- pymilvus
+- sqlmodel
+- influxdb-client
+- psycopg
+- psycopg2
+evidence:
+  repo_count: 11
+  most_recent: '2026-05-21T19:18:22Z'
+  evidence_strength: 51.06559287082325
+  contributing_repos: []
+decided_at: '2026-05-22T15:53:30.852420Z'
+history:
+- action: bootstrap-change
+  from_pick: null
+  to_pick: sqlmodel
+  reason: 'bootstrap: changed from proposed ''sqlalchemy'''
+  date: '2026-05-22T15:53:30.852420Z'

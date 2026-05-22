@@ -1,0 +1,19 @@
+category: python-terminal
+category_type: framework
+pick: typer
+alternatives:
+- rich
+- click
+- textual
+evidence:
+  repo_count: 13
+  most_recent: '2026-05-22T13:14:56Z'
+  evidence_strength: 61.74023914755213
+  contributing_repos: []
+decided_at: '2026-05-22T15:53:30.852420Z'
+history:
+- action: bootstrap-accept
+  from_pick: null
+  to_pick: typer
+  reason: 'bootstrap: accepted proposed pick'
+  date: '2026-05-22T15:53:30.852420Z'

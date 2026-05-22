@@ -1,0 +1,18 @@
+category: python-http-client
+category_type: tooling
+pick: httpx
+alternatives:
+- httpx
+- aiohttp
+evidence:
+  repo_count: 47
+  most_recent: '2026-05-22T14:43:31Z'
+  evidence_strength: 241.14553815330802
+  contributing_repos: []
+decided_at: '2026-05-22T15:53:30.852420Z'
+history:
+- action: bootstrap-change
+  from_pick: null
+  to_pick: httpx
+  reason: 'bootstrap: changed from proposed ''requests'''
+  date: '2026-05-22T15:53:30.852420Z'

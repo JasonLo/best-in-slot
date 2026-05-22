@@ -1,0 +1,23 @@
+category: python-data
+category_type: framework
+pick: pandas
+alternatives:
+- numpy
+- matplotlib
+- altair
+- plotly
+- jupyter
+- datasets
+- polars
+evidence:
+  repo_count: 59
+  most_recent: '2026-05-22T14:43:31Z'
+  evidence_strength: 301.43974119961206
+  contributing_repos: []
+decided_at: '2026-05-22T15:53:30.852420Z'
+history:
+- action: bootstrap-accept
+  from_pick: null
+  to_pick: pandas
+  reason: 'bootstrap: accepted proposed pick'
+  date: '2026-05-22T15:53:30.852420Z'

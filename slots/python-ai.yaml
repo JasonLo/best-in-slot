@@ -1,0 +1,21 @@
+category: python-ai
+category_type: framework
+pick: anthropic
+alternatives:
+- torch
+- transformers
+- anthropic
+- fastmcp
+- tensorflow
+evidence:
+  repo_count: 36
+  most_recent: '2026-05-21T21:58:12Z'
+  evidence_strength: 179.6087888319512
+  contributing_repos: []
+decided_at: '2026-05-22T15:53:30.852420Z'
+history:
+- action: bootstrap-change
+  from_pick: null
+  to_pick: anthropic
+  reason: 'bootstrap: changed from proposed ''openai'''
+  date: '2026-05-22T15:53:30.852420Z'

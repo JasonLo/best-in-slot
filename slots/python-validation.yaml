@@ -1,0 +1,16 @@
+category: python-validation
+category_type: framework
+pick: pydantic
+alternatives: []
+evidence:
+  repo_count: 41
+  most_recent: '2026-05-22T13:14:56Z'
+  evidence_strength: 209.05323763415427
+  contributing_repos: []
+decided_at: '2026-05-22T15:53:30.852420Z'
+history:
+- action: bootstrap-accept
+  from_pick: null
+  to_pick: pydantic
+  reason: 'bootstrap: accepted proposed pick'
+  date: '2026-05-22T15:53:30.852420Z'

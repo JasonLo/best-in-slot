@@ -1,0 +1,17 @@
+category: test-runner
+category_type: tooling
+pick: pytest
+alternatives:
+- nose
+evidence:
+  repo_count: 24
+  most_recent: '2026-05-22T00:24:48Z'
+  evidence_strength: 122.37502539862679
+  contributing_repos: []
+decided_at: '2026-05-22T15:53:30.852420Z'
+history:
+- action: bootstrap-accept
+  from_pick: null
+  to_pick: pytest
+  reason: 'bootstrap: accepted proposed pick'
+  date: '2026-05-22T15:53:30.852420Z'
