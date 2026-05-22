@@ -1,0 +1,14 @@
+{
+  "name": "bun-example",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.0",
+    "typescript": "^5.7.0"
+  }
+}
