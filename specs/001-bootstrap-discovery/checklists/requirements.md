@@ -1,4 +1,4 @@
-# Specification Quality Checklist: Skill-Driven Discovery UX
+# Specification Quality Checklist: Bootstrap Discovery Pipeline
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-05-22
@@ -31,8 +31,8 @@
 
 ## Validation Notes
 
-- All three user stories are independently testable and assigned priorities (P1/P2/P3).
-- Spec stays UX-level: no mention of Python, YAML schemas, Typer, or specific file paths from the existing codebase.
-- One latent risk: SC-005 ("zero re-recommendations of just-rejected candidates") implies a persisted decision record (FR-008/FR-009) that the current state model may not yet capture. This is intentional — flagged for planning.
-- Decision-record persistence and pin-state are new artifacts; planning should confirm whether they extend the existing slot YAML schema or live alongside.
+- Three user stories assigned P1/P2/P3 per the user's explicit "nice to have" framing for the skill wrapper.
+- The `/deep-dive` skill is referenced as a black box (per the user's "I already have /deep-dive") and not redefined here. FR-005 and the P2 user story assume it can be invoked per slot.
+- Open scope decision (deferred to `/speckit-plan`): whether to extend the existing slot YAML schema for evidence/deferred-state, or introduce a sidecar bootstrap-state artifact. The spec is agnostic.
+- Open scope decision (deferred to `/speckit-plan`): whether the "merge / replace / skip" choice when prior slots exist (FR-007) is offered globally for the whole run, per-slot, or both. The spec requires it to happen — does not constrain how.
 - No [NEEDS CLARIFICATION] markers — all gaps resolved with documented assumptions.
