@@ -46,5 +46,7 @@ Personal usage (0.3) · Community adoption (0.25) · Maintenance health (0.2) ·
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+shell commands, and other important information, read the current plan:
+- Active plan: `specs/001-bootstrap-discovery/plan.md`
+- Related: `specs/001-bootstrap-discovery/spec.md`, `research.md`, `data-model.md`, `contracts/`, `quickstart.md`
 <!-- SPECKIT END -->

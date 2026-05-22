@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://best-in-slot.local/contracts/001-bootstrap-discovery/bootstrap.schema.json",
+  "title": "bis bootstrap — JSON output contract",
+  "description": "Validates the structured output of `bis bootstrap` subcommands. Used by the bootstrap skill and by any other agent or script driving the CLI in --json mode.",
+  "$defs": {
+    "RepoRef": {
+      "type": "object",
+      "required": ["owner", "name", "last_pushed", "is_private", "is_org"],
+      "additionalProperties": false,
+      "properties": {
+        "owner": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1, "pattern": "^[^/]+$" },
+        "last_pushed": { "type": "string", "format": "date-time" },
+        "is_private": { "type": "boolean" },
+        "is_org": { "type": "boolean" }
+      }
+    },
+    "SkippedSource": {
+      "type": "object",
+      "required": ["source_id", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "source_id": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "CategoryProposal": {
+      "type": "object",
+      "required": [
+        "category",
+        "category_type",
+        "proposed_pick",
+        "alternatives",
+        "evidence_repo_count",
+        "evidence_most_recent",
+        "evidence_strength"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "category": { "type": "string", "minLength": 1 },
+        "category_type": { "enum": ["language", "framework", "tooling"] },
+        "proposed_pick": { "type": "string", "minLength": 1 },
+        "alternatives": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "evidence_repo_count": { "type": "integer", "minimum": 1 },
+        "evidence_most_recent": { "type": "string", "format": "date-time" },
+        "evidence_strength": { "type": "number", "minimum": 0 },
+        "confidence_qualifier": {
+          "enum": ["high", "medium", "low", "conflicting", null]
+        }
+      }
+    },
+    "SlotDecision": {
+      "type": "object",
+      "required": ["category", "action", "was_proposal_unchanged", "decided_at"],
+      "additionalProperties": false,
+      "properties": {
+        "category": { "type": "string", "minLength": 1 },
+        "action": { "enum": ["accept", "change", "skip", "defer"] },
+        "chosen_pick": { "type": ["string", "null"] },
+        "was_proposal_unchanged": { "type": "boolean" },
+        "decided_at": { "type": "string", "format": "date-time" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "action": { "enum": ["accept", "change"] } } },
+          "then": {
+            "properties": { "chosen_pick": { "type": "string", "minLength": 1 } },
+            "required": ["chosen_pick"]
+          }
+        },
+        {
+          "if": { "properties": { "action": { "enum": ["skip", "defer"] } } },
+          "then": {
+            "properties": { "chosen_pick": { "type": "null" } }
+          }
+        }
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "title": "bis bootstrap --json --batch result",
+      "description": "Full proposal set, no walk-through prompts. Returned in one document.",
+      "type": "object",
+      "required": ["mode", "run_id", "started_at", "proposals", "skipped_sources"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "const": "batch" },
+        "run_id": { "type": "string", "minLength": 1 },
+        "started_at": { "type": "string", "format": "date-time" },
+        "proposals": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/CategoryProposal" }
+        },
+        "skipped_sources": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/SkippedSource" }
+        },
+        "on_existing_choice": {
+          "enum": ["merge", "replace", "skip", null]
+        },
+        "deferred_categories_resurfaced": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    {
+      "title": "bis bootstrap confirm result",
+      "description": "Result of applying a single user decision to one proposed slot.",
+      "type": "object",
+      "required": ["mode", "decision"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "const": "confirm" },
+        "decision": { "$ref": "#/$defs/SlotDecision" },
+        "slot_yaml_written": { "type": ["string", "null"] }
+      }
+    },
+    {
+      "title": "bis bootstrap error",
+      "description": "Returned when the CLI cannot proceed (e.g., existing slots present but --on-existing flag missing in batch mode).",
+      "type": "object",
+      "required": ["mode", "error"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "const": "error" },
+        "error": {
+          "type": "object",
+          "required": ["code", "message"],
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "enum": [
+                "existing_state_unresolved",
+                "no_repos_in_window",
+                "gh_auth_missing",
+                "scanner_failed"
+              ]
+            },
+            "message": { "type": "string", "minLength": 1 },
+            "hint": { "type": "string" }
+          }
+        }
+      }
+    }
+  ]
+}

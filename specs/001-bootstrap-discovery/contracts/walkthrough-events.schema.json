@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://best-in-slot.local/contracts/001-bootstrap-discovery/walkthrough-events.schema.json",
+  "title": "Walk-through event stream (skill ⇄ user, in conversation)",
+  "description": "Logical event types the bootstrap skill emits to the user, and the response shapes it accepts. Not a wire protocol — these events are rendered as conversation turns. Documented here so the contract is reviewable and downstream UI variants can stay aligned.",
+  "$defs": {
+    "ProposalPresented": {
+      "type": "object",
+      "required": ["event", "category", "category_type", "proposed_pick", "alternatives", "evidence", "queue_position"],
+      "additionalProperties": false,
+      "properties": {
+        "event": { "const": "proposal_presented" },
+        "category": { "type": "string" },
+        "category_type": { "enum": ["language", "framework", "tooling"] },
+        "proposed_pick": { "type": "string" },
+        "alternatives": { "type": "array", "items": { "type": "string" } },
+        "evidence": {
+          "type": "object",
+          "required": ["repo_count", "most_recent"],
+          "properties": {
+            "repo_count": { "type": "integer", "minimum": 1 },
+            "most_recent": { "type": "string", "format": "date-time" },
+            "confidence_qualifier": { "enum": ["high", "medium", "low", "conflicting", null] }
+          }
+        },
+        "queue_position": {
+          "type": "object",
+          "required": ["index", "total"],
+          "properties": {
+            "index": { "type": "integer", "minimum": 1 },
+            "total": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+    "UserResponse": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["action"],
+          "properties": {
+            "action": { "enum": ["accept", "skip", "defer"] }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["action", "chosen_pick"],
+          "properties": {
+            "action": { "const": "change" },
+            "chosen_pick": { "type": "string", "minLength": 1 },
+            "source": { "enum": ["from_observed", "free_form"] }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "DecisionApplied": {
+      "type": "object",
+      "required": ["event", "category", "action"],
+      "additionalProperties": false,
+      "properties": {
+        "event": { "const": "decision_applied" },
+        "category": { "type": "string" },
+        "action": { "enum": ["accept", "change", "skip", "defer"] },
+        "chosen_pick": { "type": ["string", "null"] },
+        "slot_yaml_written": { "type": ["string", "null"] }
+      }
+    },
+    "DeepDiveOffered": {
+      "type": "object",
+      "required": ["event", "category", "pick"],
+      "additionalProperties": false,
+      "properties": {
+        "event": { "const": "deep_dive_offered" },
+        "category": { "type": "string" },
+        "pick": { "type": "string" },
+        "default_response": { "enum": ["yes", "no", "all-later", "skip-all"] }
+      }
+    },
+    "RunSummary": {
+      "type": "object",
+      "required": ["event", "run_id", "accepted", "changed", "skipped", "deferred", "skipped_sources"],
+      "additionalProperties": false,
+      "properties": {
+        "event": { "const": "run_summary" },
+        "run_id": { "type": "string" },
+        "accepted": { "type": "integer", "minimum": 0 },
+        "changed": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 },
+        "deferred": { "type": "integer", "minimum": 0 },
+        "skipped_sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["source_id", "reason"],
+            "properties": {
+              "source_id": { "type": "string" },
+              "reason": { "type": "string" }
+            }
+          }
+        },
+        "deep_dive_failures": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["category", "error"],
+            "properties": {
+              "category": { "type": "string" },
+              "error": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/ProposalPresented" },
+    { "$ref": "#/$defs/UserResponse" },
+    { "$ref": "#/$defs/DecisionApplied" },
+    { "$ref": "#/$defs/DeepDiveOffered" },
+    { "$ref": "#/$defs/RunSummary" }
+  ]
+}
