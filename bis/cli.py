@@ -199,6 +199,34 @@ def _interactive_walkthrough(
 # --------------------------------------------------------------------------- confirm subcommand
 
 
+@bootstrap_app.command("pending-dives")
+def bootstrap_pending_dives(
+    json_mode: Annotated[bool, typer.Option("--json", help="Emit JSON output.")] = True,
+) -> None:
+    """List confirmed slots that have not yet received a /deep-dive enrichment.
+
+    A slot is considered "dived" if `slots/{category}/{pick}/README.md` exists
+    AND contains a `## Deep dive` heading (the marker the existing /deep-dive
+    skill appends).
+    """
+
+    from bis.slots import list_existing_slot_categories, read_slot_state, slots_root
+
+    pending: list[dict] = []
+    for category in list_existing_slot_categories():
+        state = read_slot_state(category)
+        if state is None:
+            continue
+        readme = slots_root() / category / state.pick / "README.md"
+        if not readme.exists() or "## Deep dive" not in readme.read_text():
+            pending.append({"category": category, "pick": state.pick, "readme": str(readme)})
+
+    if json_mode:
+        _emit_json({"mode": "pending-dives", "pending": pending})
+    for entry in pending:
+        typer.echo(f"{entry['category']} → {entry['pick']} (no deep-dive yet)")
+
+
 @bootstrap_app.command("confirm")
 def bootstrap_confirm(
     category: Annotated[str, typer.Option("--category", help="Slot category.")],
