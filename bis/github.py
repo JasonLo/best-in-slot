@@ -11,7 +11,7 @@ import base64
 import json
 import subprocess
 from collections.abc import Iterable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from bis.models import RepoRef, SkippedSource
 
@@ -102,15 +102,15 @@ def _within_window(pushed_at: str, window: timedelta, now: datetime) -> bool:
     return (now - when) <= window
 
 
-def list_user_repos(window: timedelta, now: datetime | None = None) -> tuple[list[RepoRef], list[SkippedSource]]:
+def list_user_repos(
+    window: timedelta, now: datetime | None = None
+) -> tuple[list[RepoRef], list[SkippedSource]]:
     """Return repos the authenticated user owns with activity in the trailing window."""
 
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     skipped: list[SkippedSource] = []
     try:
-        items = list(
-            _gh_api_paged("/user/repos?affiliation=owner,collaborator&sort=pushed")
-        )
+        items = list(_gh_api_paged("/user/repos?affiliation=owner,collaborator&sort=pushed"))
     except subprocess.CalledProcessError as exc:
         skipped.append(SkippedSource(source_id="user:repos", reason=_stderr_reason(exc)))
         return [], skipped
@@ -128,8 +128,10 @@ def list_user_orgs() -> tuple[list[str], list[SkippedSource]]:
     return [item["login"] for item in items if "login" in item], skipped
 
 
-def list_org_repos(org: str, window: timedelta, now: datetime | None = None) -> tuple[list[RepoRef], list[SkippedSource]]:
-    now = now or datetime.now(timezone.utc)
+def list_org_repos(
+    org: str, window: timedelta, now: datetime | None = None
+) -> tuple[list[RepoRef], list[SkippedSource]]:
+    now = now or datetime.now(UTC)
     skipped: list[SkippedSource] = []
     try:
         items = list(_gh_api_paged(f"/orgs/{org}/repos?type=all&sort=pushed"))
@@ -167,7 +169,9 @@ def _repos_from_items(
 # --------------------------------------------------------------------------- manifest fetch
 
 
-def get_manifest_paths(repo: RepoRef, formats: set[str] | None = None) -> tuple[list[str], list[SkippedSource]]:
+def get_manifest_paths(
+    repo: RepoRef, formats: set[str] | None = None
+) -> tuple[list[str], list[SkippedSource]]:
     """Return manifest file paths in a repo whose basename matches a known format.
 
     Uses GitHub's `/repos/{owner}/{repo}/git/trees/HEAD?recursive=1` endpoint.

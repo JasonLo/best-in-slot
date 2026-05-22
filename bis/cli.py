@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime, timezone
-from typing import Annotated
+from datetime import UTC, datetime
+from typing import Annotated, Literal, NoReturn, cast
 
 import typer
 
@@ -27,8 +27,14 @@ from bis.bootstrap import (
     start_run_state,
 )
 from bis.config import load_settings
-from bis.github import GhUnavailable, check_auth
-from bis.models import CategoryProposal, CliError, ProfileSnapshot, SlotDecision
+from bis.models import (
+    CategoryProposal,
+    CliError,
+    DecisionAction,
+    ErrorCode,
+    ProfileSnapshot,
+    SlotDecision,
+)
 
 app = typer.Typer(
     name="bis",
@@ -48,14 +54,14 @@ app.add_typer(bootstrap_app)
 # --------------------------------------------------------------------------- helpers
 
 
-def _emit_json(payload: dict, *, exit_code: int = 0) -> None:
+def _emit_json(payload: dict, *, exit_code: int = 0) -> NoReturn:
     sys.stdout.write(json.dumps(payload, default=_json_default) + "\n")
     sys.stdout.flush()
     raise typer.Exit(code=exit_code)
 
 
-def _emit_error(code: str, message: str, hint: str | None = None) -> None:
-    err = CliError(code=code, message=message, hint=hint)  # type: ignore[arg-type]
+def _emit_error(code: ErrorCode, message: str, hint: str | None = None) -> NoReturn:
+    err = CliError(code=code, message=message, hint=hint)
     _emit_json({"mode": "error", "error": err.model_dump(exclude_none=True)}, exit_code=2)
 
 
@@ -75,8 +81,12 @@ def _proposal_to_dict(p: CategoryProposal) -> dict:
 @bootstrap_app.callback(invoke_without_command=True)
 def bootstrap_root(
     ctx: typer.Context,
-    json_mode: Annotated[bool, typer.Option("--json", help="Emit JSON-only output (machine-readable).")] = False,
-    batch: Annotated[bool, typer.Option("--batch", help="Non-interactive: emit the full proposal set and exit.")] = False,
+    json_mode: Annotated[
+        bool, typer.Option("--json", help="Emit JSON-only output (machine-readable).")
+    ] = False,
+    batch: Annotated[
+        bool, typer.Option("--batch", help="Non-interactive: emit the full proposal set and exit.")
+    ] = False,
     on_existing: Annotated[
         str | None,
         typer.Option(
@@ -84,7 +94,9 @@ def bootstrap_root(
             help="What to do when slots already exist: merge / replace / skip. Required in batch mode if slots exist.",
         ),
     ] = None,
-    dry_run: Annotated[bool, typer.Option("--dry-run", help="Mine + propose but do not persist anything.")] = False,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Mine + propose but do not persist anything.")
+    ] = False,
 ) -> None:
     """Run the bootstrap pipeline (interactive walk-through by default)."""
 
@@ -109,11 +121,24 @@ def bootstrap_root(
 
     if on_existing == "skip" and existing:
         if json_mode:
-            _emit_json({"mode": "batch", "run_id": "", "started_at": datetime.now(timezone.utc), "proposals": [], "skipped_sources": [], "on_existing_choice": "skip"})
+            _emit_json(
+                {
+                    "mode": "batch",
+                    "run_id": "",
+                    "started_at": datetime.now(UTC),
+                    "proposals": [],
+                    "skipped_sources": [],
+                    "on_existing_choice": "skip",
+                }
+            )
         typer.echo("Bootstrap skipped (existing slots preserved).")
         raise typer.Exit(0)
 
-    run = start_run_state(on_existing_choice=on_existing)
+    # The validity guard above narrows on_existing to the Literal union, but
+    # typer infers `str | None` from the option type, so cast for ty.
+    run = start_run_state(
+        on_existing_choice=cast("Literal['merge', 'replace', 'skip'] | None", on_existing)
+    )
 
     try:
         profile = mine_profile(settings)
@@ -149,7 +174,9 @@ def bootstrap_root(
         )
 
     # Interactive walk-through.
-    _interactive_walkthrough(proposals, profile, run, on_existing=on_existing or "merge", dry_run=dry_run)
+    _interactive_walkthrough(
+        proposals, profile, run, on_existing=on_existing or "merge", dry_run=dry_run
+    )
     end_run_state(run, profile.skipped_sources)
 
 
@@ -175,7 +202,11 @@ def _interactive_walkthrough(
         )
         if p.alternatives:
             typer.echo(f"        alternatives: {', '.join(p.alternatives)}")
-        action = typer.prompt("        action? [a]ccept / [c]hange / [s]kip / [d]efer", default="a").strip().lower()
+        action = (
+            typer.prompt("        action? [a]ccept / [c]hange / [s]kip / [d]efer", default="a")
+            .strip()
+            .lower()
+        )
         if action.startswith("d"):
             run = record_deferral(run, p.category)
             continue
@@ -184,7 +215,9 @@ def _interactive_walkthrough(
             continue
         chosen = p.proposed_pick
         if action.startswith("c"):
-            chosen = typer.prompt("        new pick (type any package name)").strip() or p.proposed_pick
+            chosen = (
+                typer.prompt("        new pick (type any package name)").strip() or p.proposed_pick
+            )
         decision = SlotDecision(
             category=p.category,
             action="accept" if action.startswith("a") else "change",
@@ -231,7 +264,10 @@ def bootstrap_pending_dives(
 def bootstrap_confirm(
     category: Annotated[str, typer.Option("--category", help="Slot category.")],
     action: Annotated[str, typer.Option("--action", help="accept | change | skip | defer.")],
-    pick: Annotated[str | None, typer.Option("--pick", help="The chosen package name (required for accept/change).")] = None,
+    pick: Annotated[
+        str | None,
+        typer.Option("--pick", help="The chosen package name (required for accept/change)."),
+    ] = None,
     json_mode: Annotated[bool, typer.Option("--json", help="Emit JSON-only output.")] = True,
     on_existing: Annotated[str, typer.Option("--on-existing", help="merge | replace.")] = "merge",
 ) -> None:
@@ -239,6 +275,7 @@ def bootstrap_confirm(
 
     if action not in ("accept", "change", "skip", "defer"):
         _emit_error("scanner_failed", f"invalid action {action!r}")
+    action_typed: DecisionAction = cast(DecisionAction, action)
 
     settings = load_settings()
     # We need the matching proposal to record category_type + evidence; re-mine if needed.
@@ -250,11 +287,15 @@ def bootstrap_confirm(
 
     decision = SlotDecision(
         category=category,
-        action=action,  # type: ignore[arg-type]
-        chosen_pick=pick if action in ("accept", "change") else None,
-        was_proposal_unchanged=(action == "accept" or pick == proposal.proposed_pick),
+        action=action_typed,
+        chosen_pick=pick if action_typed in ("accept", "change") else None,
+        was_proposal_unchanged=(action_typed == "accept" or pick == proposal.proposed_pick),
     )
-    written = apply_decision(decision, proposal, on_existing=on_existing) if action in ("accept", "change") else None
+    written = (
+        apply_decision(decision, proposal, on_existing=on_existing)
+        if action in ("accept", "change")
+        else None
+    )
 
     if json_mode:
         _emit_json(

@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterable, Iterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
 from bis.cache import get_cached_scan, put_cached_scan
 from bis.categories import build_proposals, order_for_walkthrough
@@ -46,7 +47,6 @@ from bis.slots import (
     write_slot_state,
 )
 
-
 # --------------------------------------------------------------------------- existing state
 
 
@@ -66,7 +66,7 @@ def mine_profile(settings: Settings, *, now: datetime | None = None) -> ProfileS
     Errors degrade into `SkippedSource` entries.
     """
 
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     window = settings.mining_window
     skipped: list[SkippedSource] = []
 
@@ -169,8 +169,7 @@ def walkthrough_iter(
 ) -> Iterator[CategoryProposal]:
     """Yield proposals one at a time (placeholder for any future iterator state)."""
 
-    for p in proposals:
-        yield p
+    yield from proposals
 
 
 # --------------------------------------------------------------------------- decision application
@@ -246,16 +245,18 @@ def apply_decision(
 # --------------------------------------------------------------------------- run state
 
 
-def start_run_state(*, on_existing_choice: str | None = None) -> BootstrapRunState:
+def start_run_state(
+    *, on_existing_choice: Literal["merge", "replace", "skip"] | None = None
+) -> BootstrapRunState:
     prior = read_bootstrap_run_state()
     deferred = list(prior.deferred_categories) if prior else []
     state = BootstrapRunState(
         run_id=str(uuid.uuid4()),
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
         ended_at=None,
         deferred_categories=deferred,
         skipped_sources=[],
-        on_existing_choice=on_existing_choice,  # type: ignore[arg-type]
+        on_existing_choice=on_existing_choice,
     )
     write_bootstrap_run_state(state)
     return state
@@ -263,7 +264,9 @@ def start_run_state(*, on_existing_choice: str | None = None) -> BootstrapRunSta
 
 def record_deferral(state: BootstrapRunState, category: str) -> BootstrapRunState:
     if category not in state.deferred_categories:
-        state = state.model_copy(update={"deferred_categories": [*state.deferred_categories, category]})
+        state = state.model_copy(
+            update={"deferred_categories": [*state.deferred_categories, category]}
+        )
         write_bootstrap_run_state(state)
     return state
 
@@ -277,9 +280,7 @@ def clear_deferral(state: BootstrapRunState, category: str) -> BootstrapRunState
 
 
 def end_run_state(state: BootstrapRunState, skipped: list[SkippedSource]) -> BootstrapRunState:
-    state = state.model_copy(
-        update={"ended_at": datetime.now(timezone.utc), "skipped_sources": skipped}
-    )
+    state = state.model_copy(update={"ended_at": datetime.now(UTC), "skipped_sources": skipped})
     write_bootstrap_run_state(state)
     return state
 

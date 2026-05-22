@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from bis.categories import order_for_walkthrough
 from bis.models import CategoryProposal
@@ -15,7 +15,7 @@ def _proposal(category: str, ctype, strength: float) -> CategoryProposal:
         proposed_pick=f"{category}-pick",
         alternatives=[],
         evidence_repo_count=5,
-        evidence_most_recent=datetime(2026, 5, 1, tzinfo=timezone.utc),
+        evidence_most_recent=datetime(2026, 5, 1, tzinfo=UTC),
         evidence_strength=strength,
     )
 

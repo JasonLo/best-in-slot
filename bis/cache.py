@@ -16,7 +16,7 @@ read. This is intentional — no migration ceremony, no in-place rewrite.
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import yaml
@@ -45,11 +45,11 @@ def get_cached_scan(repo: RepoRef, ttl: timedelta = timedelta(hours=24)) -> Cach
     try:
         raw = yaml.safe_load(path.read_text()) or {}
         cached = CachedRepoScan.model_validate(raw)
-    except (yaml.YAMLError, ValueError):
+    except yaml.YAMLError, ValueError:
         return None
     if cached.scanner_version != SCANNER_VERSION:
         return None
-    if datetime.now(timezone.utc) - cached.scanned_at >= ttl:
+    if datetime.now(UTC) - cached.scanned_at >= ttl:
         return None
     return cached
 

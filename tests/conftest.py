@@ -5,8 +5,7 @@ from __future__ import annotations
 import json
 import os
 import stat
-from collections.abc import Iterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -60,7 +59,7 @@ def gh_stub(tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -
         "fi\n"
         'if [[ "$1" == "api" ]]; then\n'
         '  endpoint="$2"\n'
-        '  # collapse the endpoint into a filename: replace / and ? with _\n'
+        "  # collapse the endpoint into a filename: replace / and ? with _\n"
         '  safe=$(echo "$endpoint" | tr "/?&=" "____")\n'
         '  fixture="${fixture_dir}/${safe}.json"\n'
         '  if [[ -f "$fixture" ]]; then\n'
@@ -92,7 +91,7 @@ def frozen_now(monkeypatch: pytest.MonkeyPatch) -> datetime:
     under test imports. The returned value is the frozen instant.
     """
 
-    fake_now = datetime(2026, 5, 22, 12, 0, 0, tzinfo=timezone.utc)
+    fake_now = datetime(2026, 5, 22, 12, 0, 0, tzinfo=UTC)
 
     class _FakeDateTime(datetime):
         @classmethod

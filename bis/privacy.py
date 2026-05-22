@@ -29,9 +29,7 @@ def to_safe_payload(profile: ProfileSnapshot) -> SafePayload:
     """
 
     if not isinstance(profile, ProfileSnapshot):
-        raise TypeError(
-            f"to_safe_payload requires ProfileSnapshot, got {type(profile).__name__}"
-        )
+        raise TypeError(f"to_safe_payload requires ProfileSnapshot, got {type(profile).__name__}")
 
     # Aggregate by (package_name, manifest_format).
     counts: dict[tuple[str, str], int] = defaultdict(int)

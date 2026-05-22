@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -20,7 +20,7 @@ def _profile_with_secrets() -> ProfileSnapshot:
     repo = RepoRef(
         owner="acme-corp",
         name="secret-product",
-        last_pushed=datetime(2026, 5, 1, tzinfo=timezone.utc),
+        last_pushed=datetime(2026, 5, 1, tzinfo=UTC),
         is_private=True,
         is_org=True,
     )
@@ -35,8 +35,8 @@ def _profile_with_secrets() -> ProfileSnapshot:
     return ProfileSnapshot(
         repos=[repo],
         signals=[signal],
-        window_start=datetime(2023, 5, 1, tzinfo=timezone.utc),
-        window_end=datetime(2026, 5, 22, tzinfo=timezone.utc),
+        window_start=datetime(2023, 5, 1, tzinfo=UTC),
+        window_end=datetime(2026, 5, 22, tzinfo=UTC),
     )
 
 
@@ -65,17 +65,44 @@ def test_safe_payload_does_not_carry_manifest_body():
 
 
 def test_safe_payload_aggregates_signals_correctly():
-    repo1 = RepoRef(owner="a", name="r1", last_pushed=datetime(2026, 1, 1, tzinfo=timezone.utc), is_private=False, is_org=False)
-    repo2 = RepoRef(owner="a", name="r2", last_pushed=datetime(2026, 4, 1, tzinfo=timezone.utc), is_private=False, is_org=False)
+    repo1 = RepoRef(
+        owner="a",
+        name="r1",
+        last_pushed=datetime(2026, 1, 1, tzinfo=UTC),
+        is_private=False,
+        is_org=False,
+    )
+    repo2 = RepoRef(
+        owner="a",
+        name="r2",
+        last_pushed=datetime(2026, 4, 1, tzinfo=UTC),
+        is_private=False,
+        is_org=False,
+    )
     profile = ProfileSnapshot(
         repos=[repo1, repo2],
         signals=[
-            ToolSignal(repo=repo1, package_name="fastapi", manifest_format="pyproject.toml", observed_at=repo1.last_pushed),
-            ToolSignal(repo=repo2, package_name="fastapi", manifest_format="pyproject.toml", observed_at=repo2.last_pushed),
-            ToolSignal(repo=repo1, package_name="httpx", manifest_format="pyproject.toml", observed_at=repo1.last_pushed),
+            ToolSignal(
+                repo=repo1,
+                package_name="fastapi",
+                manifest_format="pyproject.toml",
+                observed_at=repo1.last_pushed,
+            ),
+            ToolSignal(
+                repo=repo2,
+                package_name="fastapi",
+                manifest_format="pyproject.toml",
+                observed_at=repo2.last_pushed,
+            ),
+            ToolSignal(
+                repo=repo1,
+                package_name="httpx",
+                manifest_format="pyproject.toml",
+                observed_at=repo1.last_pushed,
+            ),
         ],
-        window_start=datetime(2023, 1, 1, tzinfo=timezone.utc),
-        window_end=datetime(2026, 5, 22, tzinfo=timezone.utc),
+        window_start=datetime(2023, 1, 1, tzinfo=UTC),
+        window_end=datetime(2026, 5, 22, tzinfo=UTC),
     )
     safe = to_safe_payload(profile)
     by_name = {item.package_name: item for item in safe.items}
@@ -101,6 +128,11 @@ def test_safe_payload_fields_are_an_allowlist():
         package_name="x",
         manifest_format="pyproject.toml",
         repo_count=1,
-        most_recent=datetime.now(timezone.utc),
+        most_recent=datetime.now(UTC),
     )
-    assert set(item.model_dump().keys()) == {"package_name", "manifest_format", "repo_count", "most_recent"}
+    assert set(item.model_dump().keys()) == {
+        "package_name",
+        "manifest_format",
+        "repo_count",
+        "most_recent",
+    }

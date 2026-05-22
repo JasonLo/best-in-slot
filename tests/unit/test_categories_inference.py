@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from bis.categories import (
     CATEGORY_TABLE,
@@ -14,18 +14,20 @@ from bis.models import ProfileSnapshot, RepoRef, SafePayload, ToolSignal
 
 
 def _now() -> datetime:
-    return datetime(2026, 5, 22, tzinfo=timezone.utc)
+    return datetime(2026, 5, 22, tzinfo=UTC)
 
 
 def _signal(pkg: str, repo_name: str = "demo") -> ToolSignal:
     repo = RepoRef(
         owner="me",
         name=repo_name,
-        last_pushed=datetime(2026, 4, 1, tzinfo=timezone.utc),
+        last_pushed=datetime(2026, 4, 1, tzinfo=UTC),
         is_private=False,
         is_org=False,
     )
-    return ToolSignal(repo=repo, package_name=pkg, manifest_format="pyproject.toml", observed_at=repo.last_pushed)
+    return ToolSignal(
+        repo=repo, package_name=pkg, manifest_format="pyproject.toml", observed_at=repo.last_pushed
+    )
 
 
 def test_heuristic_table_hits_known_packages():
@@ -61,7 +63,7 @@ def test_build_proposals_picks_strongest_per_category():
     profile = ProfileSnapshot(
         repos=[s.repo for s in signals],
         signals=signals,
-        window_start=datetime(2023, 5, 1, tzinfo=timezone.utc),
+        window_start=datetime(2023, 5, 1, tzinfo=UTC),
         window_end=_now(),
     )
     proposals = build_proposals(profile, now=_now())
@@ -75,7 +77,7 @@ def test_build_proposals_skips_unknown_packages():
     profile = ProfileSnapshot(
         repos=[signals[0].repo],
         signals=signals,
-        window_start=datetime(2023, 5, 1, tzinfo=timezone.utc),
+        window_start=datetime(2023, 5, 1, tzinfo=UTC),
         window_end=_now(),
     )
     assert build_proposals(profile, now=_now()) == []
@@ -86,7 +88,7 @@ def test_build_proposals_sets_low_confidence_under_3_repos():
     profile = ProfileSnapshot(
         repos=[signals[0].repo],
         signals=signals,
-        window_start=datetime(2023, 5, 1, tzinfo=timezone.utc),
+        window_start=datetime(2023, 5, 1, tzinfo=UTC),
         window_end=_now(),
     )
     [proposal] = build_proposals(profile, now=_now())

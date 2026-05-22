@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from bis.cache import get_cached_scan, put_cached_scan
 from bis.models import CachedRepoScan, RepoRef
@@ -13,7 +13,7 @@ def _repo() -> RepoRef:
     return RepoRef(
         owner="user",
         name="proj",
-        last_pushed=datetime(2026, 5, 1, tzinfo=timezone.utc),
+        last_pushed=datetime(2026, 5, 1, tzinfo=UTC),
         is_private=False,
         is_org=False,
     )
@@ -26,7 +26,7 @@ def test_cache_miss_when_no_file(tmp_cache_root):
 def test_cache_round_trip_when_fresh(tmp_cache_root):
     scan = CachedRepoScan(
         repo=_repo(),
-        scanned_at=datetime.now(timezone.utc),
+        scanned_at=datetime.now(UTC),
         signals=[],
         scanner_version=SCANNER_VERSION,
     )
@@ -39,7 +39,7 @@ def test_cache_round_trip_when_fresh(tmp_cache_root):
 def test_cache_expires_after_ttl(tmp_cache_root):
     stale = CachedRepoScan(
         repo=_repo(),
-        scanned_at=datetime.now(timezone.utc) - timedelta(hours=25),
+        scanned_at=datetime.now(UTC) - timedelta(hours=25),
         signals=[],
         scanner_version=SCANNER_VERSION,
     )
@@ -50,7 +50,7 @@ def test_cache_expires_after_ttl(tmp_cache_root):
 def test_cache_invalidates_on_scanner_version_mismatch(tmp_cache_root):
     scan = CachedRepoScan(
         repo=_repo(),
-        scanned_at=datetime.now(timezone.utc),
+        scanned_at=datetime.now(UTC),
         signals=[],
         scanner_version="999",  # mismatch
     )
@@ -61,7 +61,7 @@ def test_cache_invalidates_on_scanner_version_mismatch(tmp_cache_root):
 def test_cache_layout_one_file_per_repo(tmp_cache_root):
     scan = CachedRepoScan(
         repo=_repo(),
-        scanned_at=datetime.now(timezone.utc),
+        scanned_at=datetime.now(UTC),
         signals=[],
         scanner_version=SCANNER_VERSION,
     )

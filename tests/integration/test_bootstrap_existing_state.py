@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 import yaml
@@ -18,17 +18,22 @@ def _profile() -> ProfileSnapshot:
     repo = RepoRef(
         owner="me",
         name="alpha",
-        last_pushed=datetime(2026, 4, 1, tzinfo=timezone.utc),
+        last_pushed=datetime(2026, 4, 1, tzinfo=UTC),
         is_private=False,
         is_org=False,
     )
     return ProfileSnapshot(
         repos=[repo],
         signals=[
-            ToolSignal(repo=repo, package_name="fastapi", manifest_format="pyproject.toml", observed_at=repo.last_pushed),
+            ToolSignal(
+                repo=repo,
+                package_name="fastapi",
+                manifest_format="pyproject.toml",
+                observed_at=repo.last_pushed,
+            ),
         ],
-        window_start=datetime(2023, 5, 1, tzinfo=timezone.utc),
-        window_end=datetime(2026, 5, 22, tzinfo=timezone.utc),
+        window_start=datetime(2023, 5, 1, tzinfo=UTC),
+        window_end=datetime(2026, 5, 22, tzinfo=UTC),
     )
 
 
@@ -88,7 +93,18 @@ def test_replace_records_bootstrap_replace_history(patched_pipeline, tmp_slots_r
     runner = CliRunner()
     result = runner.invoke(
         cli_mod.app,
-        ["bootstrap", "confirm", "--category", "python-web", "--action", "accept", "--pick", "fastapi", "--json", "--on-existing=replace"],
+        [
+            "bootstrap",
+            "confirm",
+            "--category",
+            "python-web",
+            "--action",
+            "accept",
+            "--pick",
+            "fastapi",
+            "--json",
+            "--on-existing=replace",
+        ],
     )
     assert result.exit_code == 0, result.stderr
     state = yaml.safe_load((tmp_slots_root / "python-web.yaml").read_text())

@@ -13,11 +13,10 @@ from __future__ import annotations
 import math
 from collections import defaultdict
 from collections.abc import Iterable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from bis.models import CategoryProposal, CategoryType, ProfileSnapshot
+from bis.models import CategoryProposal, CategoryType, ProfileSnapshot, ToolSignal
 from bis.privacy import SafePayload, to_safe_payload  # re-exported for callers
-
 
 # --------------------------------------------------------------------------- heuristic table
 #
@@ -115,9 +114,7 @@ def infer_categories_via_llm(safe: SafePayload) -> dict[str, tuple[str, Category
     """
 
     if not isinstance(safe, SafePayload):
-        raise TypeError(
-            f"infer_categories_via_llm requires SafePayload, got {type(safe).__name__}"
-        )
+        raise TypeError(f"infer_categories_via_llm requires SafePayload, got {type(safe).__name__}")
     # Stub: real implementation goes here. See R-3 in research.md.
     return {}
 
@@ -125,14 +122,16 @@ def infer_categories_via_llm(safe: SafePayload) -> dict[str, tuple[str, Category
 # --------------------------------------------------------------------------- evidence-strength
 
 
-def evidence_strength(repo_count: int, oldest: datetime, most_recent: datetime, now: datetime | None = None) -> float:
+def evidence_strength(
+    repo_count: int, oldest: datetime, most_recent: datetime, now: datetime | None = None
+) -> float:
     """Composite score per R-6.
 
     Higher = stronger evidence. Deterministic given the same inputs.
     """
 
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
     months_since_oldest = max(0.0, _months_between(oldest, now))
     months_since_recent = max(0.0, _months_between(most_recent, now))
     breadth = math.log2(1 + months_since_oldest)
@@ -148,7 +147,9 @@ def _months_between(earlier: datetime, later: datetime) -> float:
 # --------------------------------------------------------------------------- proposal construction
 
 
-def build_proposals(profile: ProfileSnapshot, now: datetime | None = None) -> list[CategoryProposal]:
+def build_proposals(
+    profile: ProfileSnapshot, now: datetime | None = None
+) -> list[CategoryProposal]:
     """Aggregate the profile's signals into one `CategoryProposal` per category.
 
     Unknown packages (no heuristic hit, no LLM-inferred category) are dropped —
@@ -156,7 +157,7 @@ def build_proposals(profile: ProfileSnapshot, now: datetime | None = None) -> li
     """
 
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     # Pre-flight: try to classify all unknowns via the LLM stub.
     unknown_pkgs = {
@@ -167,22 +168,23 @@ def build_proposals(profile: ProfileSnapshot, now: datetime | None = None) -> li
         safe = to_safe_payload(profile)
         llm_map = infer_categories_via_llm(safe)
 
-    # Per-category aggregation.
-    per_category: dict[str, dict[str, list]] = defaultdict(
-        lambda: {"picks": defaultdict(list), "type": None}
+    # Per-category aggregation. Keep type assignments in a separate dict so each
+    # value has a single, narrowable type — much friendlier for ty.
+    category_types: dict[str, CategoryType] = {}
+    picks_per_category: dict[str, dict[str, list[ToolSignal]]] = defaultdict(
+        lambda: defaultdict(list)
     )
     for sig in profile.signals:
         match = lookup_category(sig.package_name) or llm_map.get(sig.package_name)
         if match is None:
             continue
         category, category_type = match
-        per_category[category]["type"] = category_type
-        per_category[category]["picks"][sig.package_name].append(sig)
+        category_types[category] = category_type
+        picks_per_category[category][sig.package_name].append(sig)
 
     proposals: list[CategoryProposal] = []
-    for category, payload in per_category.items():
-        picks_map: dict[str, list] = payload["picks"]  # type: ignore[assignment]
-        category_type: CategoryType = payload["type"]  # type: ignore[assignment]
+    for category, picks_map in picks_per_category.items():
+        category_type: CategoryType = category_types[category]
 
         pick_scores: list[tuple[str, float, int, datetime]] = []
         for pkg, sigs in picks_map.items():

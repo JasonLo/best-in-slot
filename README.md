@@ -4,6 +4,15 @@ Personal tool selections, one per slot. Each folder under `slots/` documents a s
 
 Compose à la carte — recipes near the bottom show common combinations.
 
+## Getting started
+
+```bash
+uv sync                         # install pinned deps
+uv run bis bootstrap            # interactive walk-through: mine GH repos → propose slots → confirm → /deep-dive
+```
+
+In Claude Code, the same flow is available conversationally via `/bis-bootstrap`. See `specs/001-bootstrap-discovery/quickstart.md` for the full first-run guide (existing-state handling, abort/resume, privacy verification, troubleshooting).
+
 ## Shared conventions (Python)
 
 These hold across every Python slot unless the slot's README says otherwise:

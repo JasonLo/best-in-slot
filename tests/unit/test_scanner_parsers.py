@@ -96,5 +96,12 @@ def test_unknown_format_raises():
 
 
 def test_known_formats_set_matches_parsers():
-    expected = {"pyproject.toml", "requirements.txt", "package.json", "go.mod", "Cargo.toml", "Gemfile"}
-    assert KNOWN_FORMATS == expected
+    expected = {
+        "pyproject.toml",
+        "requirements.txt",
+        "package.json",
+        "go.mod",
+        "Cargo.toml",
+        "Gemfile",
+    }
+    assert expected == KNOWN_FORMATS

@@ -8,7 +8,7 @@ test exercises everything from CLI parsing through to slot YAML writes.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 import yaml
@@ -23,28 +23,48 @@ def _profile() -> ProfileSnapshot:
     repo = RepoRef(
         owner="me",
         name="alpha",
-        last_pushed=datetime(2026, 4, 1, tzinfo=timezone.utc),
+        last_pushed=datetime(2026, 4, 1, tzinfo=UTC),
         is_private=False,
         is_org=False,
     )
     repo2 = RepoRef(
         owner="me",
         name="beta",
-        last_pushed=datetime(2026, 3, 1, tzinfo=timezone.utc),
+        last_pushed=datetime(2026, 3, 1, tzinfo=UTC),
         is_private=False,
         is_org=False,
     )
     signals = [
-        ToolSignal(repo=repo, package_name="fastapi", manifest_format="pyproject.toml", observed_at=repo.last_pushed),
-        ToolSignal(repo=repo, package_name="httpx", manifest_format="pyproject.toml", observed_at=repo.last_pushed),
-        ToolSignal(repo=repo2, package_name="fastapi", manifest_format="pyproject.toml", observed_at=repo2.last_pushed),
-        ToolSignal(repo=repo2, package_name="ruff", manifest_format="pyproject.toml", observed_at=repo2.last_pushed),
+        ToolSignal(
+            repo=repo,
+            package_name="fastapi",
+            manifest_format="pyproject.toml",
+            observed_at=repo.last_pushed,
+        ),
+        ToolSignal(
+            repo=repo,
+            package_name="httpx",
+            manifest_format="pyproject.toml",
+            observed_at=repo.last_pushed,
+        ),
+        ToolSignal(
+            repo=repo2,
+            package_name="fastapi",
+            manifest_format="pyproject.toml",
+            observed_at=repo2.last_pushed,
+        ),
+        ToolSignal(
+            repo=repo2,
+            package_name="ruff",
+            manifest_format="pyproject.toml",
+            observed_at=repo2.last_pushed,
+        ),
     ]
     return ProfileSnapshot(
         repos=[repo, repo2],
         signals=signals,
-        window_start=datetime(2023, 5, 1, tzinfo=timezone.utc),
-        window_end=datetime(2026, 5, 22, tzinfo=timezone.utc),
+        window_start=datetime(2023, 5, 1, tzinfo=UTC),
+        window_end=datetime(2026, 5, 22, tzinfo=UTC),
     )
 
 
@@ -80,7 +100,17 @@ def test_confirm_writes_slot_yaml(patched_pipeline, tmp_slots_root):
     runner = CliRunner()
     result = runner.invoke(
         cli_mod.app,
-        ["bootstrap", "confirm", "--category", "python-web", "--action", "accept", "--pick", "fastapi", "--json"],
+        [
+            "bootstrap",
+            "confirm",
+            "--category",
+            "python-web",
+            "--action",
+            "accept",
+            "--pick",
+            "fastapi",
+            "--json",
+        ],
     )
     assert result.exit_code == 0, result.stderr
     payload = json.loads(result.stdout)
@@ -98,7 +128,17 @@ def test_confirm_change_records_history_with_new_pick(patched_pipeline, tmp_slot
     runner = CliRunner()
     result = runner.invoke(
         cli_mod.app,
-        ["bootstrap", "confirm", "--category", "python-web", "--action", "change", "--pick", "django", "--json"],
+        [
+            "bootstrap",
+            "confirm",
+            "--category",
+            "python-web",
+            "--action",
+            "change",
+            "--pick",
+            "django",
+            "--json",
+        ],
     )
     assert result.exit_code == 0, result.stderr
     state = yaml.safe_load((tmp_slots_root / "python-web.yaml").read_text())
